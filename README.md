@@ -174,16 +174,19 @@ packaging/smoke_test.py <programm>` prüft ein gebautes Paket mit echten Umwandl
 CI baut und prüft alle Pakete bei jedem Pull Request, inklusive stiller Installation und
 Deinstallation unter Windows.
 
-**Release veröffentlichen:** Version in `src/omniconverter/__init__.py` erhöhen, mergen, dann
-taggen:
+**Release veröffentlichen:** Das geht ohne lokalen Checkout, direkt auf GitHub:
 
-```bash
-git tag v0.2.0 && git push origin v0.2.0
-```
+- **Automatisch:** Bei jedem Push auf `main`, also auch beim Mergen eines PR, baut und prüft
+  die CI alle Pakete. Gibt es zur Version in `src/omniconverter/__init__.py` noch kein
+  Release, legt sie es an, samt Tag `v<version>`, allen Dateien und `SHA256SUMS.txt`. Für ein
+  neues Release reicht es also, `__version__` zu erhöhen und den PR zu mergen.
+- **Per Knopfdruck:** *Actions → CI → Run workflow* auf `main`. Gibt es das Release schon,
+  werden seine Dateien neu hochgeladen.
+- **Über die Release-Seite:** Ein in der Oberfläche veröffentlichtes Release mit dem Tag
+  `v<version>` (kein Entwurf) füllt die CI anschließend mit den Dateien.
 
-Die CI baut dann alle Pakete, prüft sie und legt ein GitHub-Release mit allen Dateien und
-`SHA256SUMS.txt` an. Tags mit Bindestrich (z. B. `v0.2.0-beta.1`) werden als Vorabversion
-markiert. Passt der Tag nicht zur Version im Code, bricht der Release ab.
+Versionen mit Buchstaben (z. B. `0.2.0b1`, `0.2.0rc1`) werden als Vorabversion markiert.
+Passt ein Tag nicht zur Version im Code, bricht der Release-Job ab.
 
 **Neues Format oder Werkzeug:** Eine `Backend`-Klasse schreiben (`conversions()`,
 `options()`, `convert()`) und in `backends/__init__.py` eintragen. GUI und CLI übernehmen
