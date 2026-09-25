@@ -137,6 +137,19 @@ MESSAGES: dict[str, tuple[str, str]] = {
     # --- gif ---
     "opt.colors": ("Farben", "Colors"),
     "opt.dither": ("Dithering", "Dithering"),
+    "opt.colors.all": ("Alle (verlustfrei)", "All (lossless)"),
+    "opt.colors_help": (
+        "Weniger Farben machen PNGs deutlich kleiner (Palettenbild). Für Fotos reichen oft "
+        "256, für Logos und Screenshots 64 oder weniger. Animierte PNGs behalten alle Farben.",
+        "Fewer colors make PNGs much smaller (palette image). Photos often look fine with 256, "
+        "logos and screenshots with 64 or fewer. Animated PNGs keep all colors.",
+    ),
+    "opt.png_dither_help": (
+        "Mischt Farbpunkte gegen sichtbare Farbstufen, die Datei wird etwas größer. Wirkt nur "
+        "bei Bildern ohne Transparenz.",
+        "Mixes dots of color against visible banding; the file gets a little larger. Only for "
+        "images without transparency.",
+    ),
     "opt.dither.none": ("Keins (flächig)", "None (flat)"),
     "opt.dither.bayer": ("Bayer (klein)", "Bayer (small)"),
     "opt.dither.floyd_steinberg": ("Floyd-Steinberg (weich)", "Floyd–Steinberg (smooth)"),

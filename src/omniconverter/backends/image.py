@@ -24,6 +24,8 @@ _QUALITY_DEFAULT = {"jpg": 90, "webp": 85, "avif": 70, "heic": 80}
 _NO_ALPHA = {"jpg", "bmp", "pdf"}
 _ANIMATED = {"gif", "webp", "png"}
 _ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
+PALETTE_SIZES = (256, 128, 64, 32, 16, 8, 4, 2)  # "colors" for PNG; "all" keeps true color
+_OPTIMIZE_PIXELS = 4_000_000  # smallest PNG encoding is slow for huge images
 
 _heif_registered = False
 
@@ -70,6 +72,17 @@ class ImageBackend(Backend):
                 maximum=100, suffix=" %",
                 visible_if=when("lossless", False) if target.id in ("webp", "avif") else (),
             ))
+        if target.id == "png":
+            opts += [
+                Option("colors", t("opt.colors"), Kind.CHOICE, "all",
+                       choices=(("all", t("opt.colors.all")),
+                                *((n, str(n)) for n in PALETTE_SIZES)),
+                       help=t("opt.colors_help")),
+                Option("dither", t("opt.dither"), Kind.CHOICE, "floyd_steinberg", advanced=True,
+                       choices=tuple((d, t(f"opt.dither.{d}"))
+                                     for d in ("floyd_steinberg", "none")),
+                       visible_if=when("colors", *PALETTE_SIZES), help=t("opt.png_dither_help")),
+            ]
         if target.id in _NO_ALPHA:
             opts.append(Option("background", t("opt.background"), Kind.COLOR, "#ffffff",
                                advanced=True))
@@ -101,6 +114,11 @@ class ImageBackend(Backend):
                     frames.append(_prepare(frame.copy(), target, opts))
         except (UnidentifiedImageError, OSError, ValueError) as exc:
             raise ConversionError(t("error.image_failed"), str(exc)) from exc
+        colors = opts.get("colors", "all")
+        if target == "png" and colors != "all" and len(frames) == 1:
+            # Animated PNGs share one palette for all frames, so only still images are reduced.
+            frames[0] = reduce_colors(frames[0], int(colors),
+                                      opts.get("dither", "floyd_steinberg") != "none")
 
         save: dict[str, Any] = {}
         if "icc_profile" in info and target not in ("gif", "ico", "bmp"):
@@ -116,6 +134,9 @@ class ImageBackend(Backend):
             save.pop("quality", None)
         if target == "jpg":
             save.update(optimize=True, progressive=True)
+        elif target == "png":
+            width, height = frames[0].size
+            save["optimize"] = width * height < _OPTIMIZE_PIXELS
         elif target == "tiff":
             save["compression"] = "tiff_lzw"
         elif target == "ico":
@@ -163,6 +184,22 @@ def _prepare(im: Any, target: str, opts: dict[str, Any]) -> Any:
     if target == "gif" and im.mode in ("P", "L"):
         return im
     return im.convert("RGBA" if has_alpha else "RGB")
+
+
+def reduce_colors(im: Any, colors: int, dither: bool) -> Any:
+    """A palette image with at most *colors* colors (like pngquant, if a little simpler)."""
+    from PIL import Image
+
+    has_alpha = im.mode in ("RGBA", "LA", "PA") or (
+        im.mode == "P" and "transparency" in im.info
+    )
+    if has_alpha:  # Pillow can only dither to a palette without alpha
+        return im.convert("RGBA").quantize(colors, method=Image.Quantize.FASTOCTREE)
+    rgb = im.convert("RGB")
+    palette = rgb.quantize(colors, method=Image.Quantize.MEDIANCUT)
+    if not dither:
+        return palette
+    return rgb.quantize(palette=palette, dither=Image.Dither.FLOYDSTEINBERG)
 
 
 def _resize(im: Any, opts: dict[str, Any]) -> Any:
