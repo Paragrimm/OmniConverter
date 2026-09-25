@@ -73,7 +73,7 @@ def parse_encoders(output: str) -> set[str]:
     """Parse ``ffmpeg -encoders`` output into encoder names."""
     names = set()
     for line in output.splitlines():
-        m = re.match(r"\s*[VAS][A-Z.]{5}\s+(\S+)", line)
+        m = re.match(r"\s*[VAS][A-Z.]{5}\s+([\w-]+)\s", line)
         if m:
             names.add(m.group(1))
     return names

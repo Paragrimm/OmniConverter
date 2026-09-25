@@ -9,9 +9,9 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from omniconverter.core.converter import Converter  # noqa: E402
-from omniconverter.core.tools import ToolLocator  # noqa: E402
-from omniconverter.i18n import set_language  # noqa: E402
+from omniconverter.core.converter import Converter
+from omniconverter.core.tools import ToolLocator
+from omniconverter.i18n import set_language
 
 _LOCATOR = ToolLocator()
 HAVE_FFMPEG = _LOCATOR.available("ffmpeg") and _LOCATOR.available("ffprobe")

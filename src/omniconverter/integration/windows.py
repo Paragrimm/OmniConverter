@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import PureWindowsPath
 
 from omniconverter.i18n import t
 
@@ -30,9 +30,12 @@ def verb_key(ext: str) -> str:
     return rf"{BASE}\.{ext}\shell\{VERB}"
 
 
-def icon_location(command: list[str]) -> str:
-    exe = Path(command[0])
-    if exe.suffix.lower() == ".exe" and exe.stem.lower() not in ("python", "pythonw"):
+def icon_location(command: list[str], frozen: bool | None = None) -> str:
+    """The packaged EXE carries our icon; pip's launcher EXE does not, so use the .ico then."""
+    if frozen is None:
+        frozen = bool(getattr(sys, "frozen", False))
+    exe = PureWindowsPath(command[0])
+    if frozen and exe.suffix.lower() == ".exe":
         return f"{exe},0"
     from omniconverter.integration import RESOURCES
 

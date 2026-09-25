@@ -61,22 +61,31 @@ class SingleInstance(QObject):
     def _on_connection(self) -> None:
         assert self._server is not None
         while self._server.hasPendingConnections():
-            socket = self._server.nextPendingConnection()
-            buffer = bytearray()
+            self._handle(self._server.nextPendingConnection())
 
-            def read(sock: QLocalSocket = socket, buf: bytearray = buffer) -> None:
-                buf.extend(bytes(sock.readAll()))
+    def _handle(self, socket: QLocalSocket) -> None:
+        buffer = bytearray()
+        finished = False
 
-            def done(buf: bytearray = buffer, sock: QLocalSocket = socket) -> None:
-                read()
-                sock.deleteLater()
-                try:
-                    paths = json.loads(buf.decode("utf-8") or "[]")
-                except ValueError:
-                    return
-                self.files_received.emit([str(p) for p in paths])
+        def read() -> None:
+            buffer.extend(bytes(socket.readAll()))
 
-            socket.readyRead.connect(read)
-            socket.disconnected.connect(done)
-            if socket.state() == QLocalSocket.LocalSocketState.UnconnectedState:
-                done()  # the client was quicker than us
+        def done() -> None:
+            nonlocal finished
+            if finished:  # both "disconnected" and the state check below may get here
+                return
+            finished = True
+            read()
+            socket.readyRead.disconnect(read)
+            socket.disconnected.disconnect(done)
+            socket.deleteLater()
+            try:
+                paths = json.loads(buffer.decode("utf-8") or "[]")
+            except ValueError:
+                return
+            self.files_received.emit([str(p) for p in paths])
+
+        socket.readyRead.connect(read)
+        socket.disconnected.connect(done)
+        if socket.state() == QLocalSocket.LocalSocketState.UnconnectedState:
+            done()  # the client was quicker than us
