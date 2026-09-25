@@ -19,6 +19,10 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "category.spreadsheet": ("Tabelle", "Spreadsheet"),
     "category.presentation": ("Präsentation", "Presentation"),
     "category.data": ("Daten", "Data"),
+    "category.texture": ("Textur-Maps", "Texture maps"),
+    "category.qr": ("QR-Code", "QR code"),
+    "category.model": ("3D-Modell", "3D model"),
+    "category.generator": ("Erzeugt", "Generated"),
     # --- errors ---
     "error.tool_missing": ("{tool} ist nicht installiert.", "{tool} is not installed."),
     "error.not_a_file": ("Datei nicht gefunden: {path}", "File not found: {path}"),
@@ -69,6 +73,37 @@ MESSAGES: dict[str, tuple[str, str]] = {
         "Tabellenblatt „{sheet}“ nicht gefunden.",
         "Sheet “{sheet}” not found.",
     ),
+    "error.companion_exists": (
+        "„{name}“ existiert bereits und wird nicht überschrieben.",
+        "“{name}” already exists and is not overwritten.",
+    ),
+    "error.qr_too_large": (
+        "Zu viel Inhalt für einen QR-Code ({size} Bytes). Mit dieser Fehlerkorrektur passen "
+        "höchstens {limit} Bytes, mit Stufe L bis zu {max}.",
+        "Too much content for a QR code ({size} bytes). With this error correction at most "
+        "{limit} bytes fit, with level L up to {max}.",
+    ),
+    "error.qr_empty": ("Der QR-Code hätte keinen Inhalt.", "The QR code would be empty."),
+    "error.qr_no_url": (
+        "In der Verknüpfung steht keine Adresse.",
+        "The shortcut contains no address.",
+    ),
+    "error.qr_failed": (
+        "Der QR-Code konnte nicht gespeichert werden.",
+        "Could not save the QR code.",
+    ),
+    "error.model_failed": (
+        "Das 3D-Modell konnte nicht umgewandelt werden.",
+        "Could not convert the 3D model.",
+    ),
+    "error.model_empty": (
+        "Das 3D-Modell enthält keine Geometrie.",
+        "The 3D model contains no geometry.",
+    ),
+    "error.blender_failed": (
+        "Blender konnte das Modell nicht umwandeln.",
+        "Blender could not convert the model.",
+    ),
     # --- common options ---
     "opt.start": ("Start", "Start"),
     "opt.end": ("Ende", "End"),
@@ -109,6 +144,13 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "opt.loop": ("Wiederholen", "Loop"),
     "opt.loop.forever": ("Endlos", "Forever"),
     "opt.loop.once": ("Einmal abspielen", "Play once"),
+    "opt.keep_transparency": ("Transparenz erhalten", "Keep transparency"),
+    "opt.keep_transparency_help": (
+        "Durchsichtige Stellen bleiben durchsichtig (VP9 mit Alphakanal, z. B. für Webseiten "
+        "und OBS).",
+        "Transparent areas stay transparent (VP9 with alpha channel, e.g. for websites and "
+        "OBS).",
+    ),
     # --- audio ---
     "opt.bitrate": ("Bitrate", "Bitrate"),
     "opt.flac_level": ("Kompression", "Compression"),
@@ -132,6 +174,120 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "opt.max_height": ("Max. Höhe", "Max. height"),
     "opt.background": ("Hintergrund für Transparenz", "Background for transparency"),
     "opt.lossless": ("Verlustfrei", "Lossless"),
+    # --- texture maps ---
+    "opt.tex_strength": ("Stärke", "Strength"),
+    "opt.tex_strength_help": (
+        "Wie stark die Oberfläche geneigt wirkt.",
+        "How steep the surface appears.",
+    ),
+    "opt.tex_blur": ("Glättung", "Smoothing"),
+    "opt.tex_blur_help": (
+        "Zeichnet vorher weich, damit Bildrauschen keine Krümel erzeugt.",
+        "Blurs first, so image noise does not turn into bumps.",
+    ),
+    "opt.tex_invert_height": ("Höhe umkehren", "Invert height"),
+    "opt.tex_invert_height_help": (
+        "Normal: Helles ist erhaben. Umgekehrt: Dunkles ist erhaben.",
+        "Normally bright means raised; inverted, dark means raised.",
+    ),
+    "opt.tex_convention": ("Grün-Kanal", "Green channel"),
+    "opt.tex_convention.opengl": (
+        "OpenGL (Y+): Blender, Unity, Godot",
+        "OpenGL (Y+): Blender, Unity, Godot",
+    ),
+    "opt.tex_convention.directx": (
+        "DirectX (Y−): Unreal, 3ds Max",
+        "DirectX (Y−): Unreal, 3ds Max",
+    ),
+    "opt.tex_brightness": ("Helligkeit", "Brightness"),
+    "opt.tex_contrast": ("Kontrast", "Contrast"),
+    "opt.tex_invert": ("Umkehren (Roughness-Map)", "Invert (roughness map)"),
+    "opt.tex_invert_help": (
+        "Helle Stellen werden matt statt glänzend – das ergibt eine Roughness-Map für PBR.",
+        "Bright areas become matte instead of shiny – a roughness map for PBR.",
+    ),
+    "opt.seamless": ("Nahtlos kachelbar", "Seamless (tileable)"),
+    "opt.seamless_help": (
+        "Die Ränder passen aneinander, wenn die Textur wiederholt wird.",
+        "The edges match when the texture is repeated.",
+    ),
+    # --- noise ---
+    "opt.noise_kind": ("Art", "Type"),
+    "opt.noise_kind.fbm": ("Wolken (fraktal)", "Clouds (fractal)"),
+    "opt.noise_kind.perlin": ("Perlin (weich)", "Perlin (smooth)"),
+    "opt.noise_kind.ridged": ("Gebirge (Grate)", "Ridges"),
+    "opt.noise_kind.worley": ("Zellen (Worley)", "Cells (Worley)"),
+    "opt.noise_kind.white": ("Weißes Rauschen", "White noise"),
+    "opt.seed": ("Seed", "Seed"),
+    "opt.seed_help": (
+        "Gleicher Seed und gleiche Einstellungen ergeben immer dasselbe Bild.",
+        "The same seed and settings always give the same image.",
+    ),
+    "opt.height": ("Höhe", "Height"),
+    "opt.noise_scale": ("Strukturgröße", "Feature size"),
+    "opt.noise_scale_help": (
+        "Ungefähre Größe der gröbsten Strukturen.",
+        "Approximate size of the coarsest features.",
+    ),
+    "opt.noise_octaves": ("Detailstufen", "Octaves"),
+    "opt.noise_octaves_help": (
+        "Wie viele immer feinere Ebenen übereinanderliegen.",
+        "How many ever finer layers are added.",
+    ),
+    "opt.noise_roughness": ("Rauheit", "Roughness"),
+    "opt.noise_color_low": ("Farbe dunkel", "Dark color"),
+    "opt.noise_color_high": ("Farbe hell", "Light color"),
+    # --- QR codes ---
+    "opt.qr_error_correction": ("Fehlerkorrektur", "Error correction"),
+    "opt.qr_error_correction.l": ("L – 7 % (passt am meisten)", "L – 7 % (fits the most)"),
+    "opt.qr_error_correction.m": ("M – 15 %", "M – 15 %"),
+    "opt.qr_error_correction.q": ("Q – 25 %", "Q – 25 %"),
+    "opt.qr_error_correction.h": ("H – 30 % (am robustesten)", "H – 30 % (most robust)"),
+    "opt.qr_error_correction_help": (
+        "Höhere Stufen bleiben lesbar, wenn der Code verschmutzt oder verdeckt ist, fassen "
+        "aber weniger.",
+        "Higher levels stay readable when the code is dirty or covered, but hold less.",
+    ),
+    "opt.qr_size": ("Größe", "Size"),
+    "opt.qr_size_help": (
+        "Ungefähre Kantenlänge. Jedes Modul bekommt ganze Pixel, damit der Code scharf bleibt.",
+        "Approximate edge length. Every module gets whole pixels so the code stays sharp.",
+    ),
+    "opt.qr_dark": ("Farbe", "Color"),
+    "opt.qr_light": ("Hintergrund", "Background"),
+    "opt.qr_transparent": ("Transparenter Hintergrund", "Transparent background"),
+    "opt.qr_border": ("Rand", "Quiet zone"),
+    "opt.qr_border_help": (
+        "Leerer Rand in Modulen. Scanner brauchen meist 4.",
+        "Empty margin in modules. Scanners usually need 4.",
+    ),
+    # --- 3D models ---
+    "opt.model_scale": ("Skalierung", "Scale"),
+    "opt.model_scale.none": ("Unverändert", "Unchanged"),
+    "opt.model_scale.cm_to_m": ("cm → m (× 0,01)", "cm → m (× 0.01)"),
+    "opt.model_scale.m_to_cm": ("m → cm (× 100)", "m → cm (× 100)"),
+    "opt.model_scale.mm_to_m": ("mm → m (× 0,001)", "mm → m (× 0.001)"),
+    "opt.model_scale.m_to_mm": ("m → mm (× 1000)", "m → mm (× 1000)"),
+    "opt.model_scale.inch_to_mm": ("Zoll → mm (× 25,4)", "inch → mm (× 25.4)"),
+    "opt.model_scale_help": (
+        "Rechnet die Einheit um, wenn das Modell im Zielprogramm zu groß oder zu klein ist.",
+        "Converts the unit if the model is too large or too small in the target program.",
+    ),
+    "opt.model_up_axis": ("Oben-Achse", "Up axis"),
+    "opt.model_up_axis.keep": ("Unverändert", "Unchanged"),
+    "opt.model_up_axis.y_to_z": (
+        "Y oben → Z oben (z. B. 3D-Druck)",
+        "Y up → Z up (e.g. 3D printing)",
+    ),
+    "opt.model_up_axis.z_to_y": (
+        "Z oben → Y oben (z. B. glTF, Spiele)",
+        "Z up → Y up (e.g. glTF, games)",
+    ),
+    "opt.model_up_axis_help": (
+        "Dreht das Modell um 90°, falls es im Zielprogramm auf der Seite liegt.",
+        "Rotates the model by 90° if it lies on its side in the target program.",
+    ),
+    "opt.model_ascii": ("Als Text speichern (ASCII)", "Save as text (ASCII)"),
     # --- documents ---
     "opt.allow_resources": ("Lokale Bilder einbinden", "Embed local images"),
     "opt.allow_resources_help": (
@@ -163,6 +319,16 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "gui.drop.dialog": ("Dateien zum Umwandeln auswählen", "Choose files to convert"),
     "gui.drop.supported": ("Unterstützte Dateien", "Supported files"),
     "gui.drop.all_files": ("Alle Dateien", "All files"),
+    "gui.qr_placeholder": (
+        "Link oder Text für einen QR-Code …",
+        "Link or text for a QR code …",
+    ),
+    "gui.qr_button": ("QR-Code", "QR code"),
+    "gui.noise_button": ("Noise-Map erzeugen", "Create noise map"),
+    "gui.qr_content": ("Inhalt des QR-Codes", "QR code content"),
+    "gui.qr_bytes": ("{n} Bytes", "{n} bytes"),
+    "gui.generated": ("Wird neu erzeugt, ohne Quelldatei", "Generated, no source file"),
+    "gui.randomize": ("Zufälligen Wert würfeln", "Roll a random value"),
     "gui.privacy_footer": (
         "🔒 100 % lokal – nichts verlässt deinen Rechner",
         "🔒 100 % local – nothing leaves your computer",
@@ -230,8 +396,10 @@ MESSAGES: dict[str, tuple[str, str]] = {
     ),
     # --- CLI ---
     "cli.description": (
-        "Wandelt Dateien lokal um – Video, Audio, Bilder, Dokumente und Daten.",
-        "Converts files locally – video, audio, images, documents and data.",
+        "Wandelt Dateien lokal um – Video, Audio, Bilder, 3D-Modelle, Dokumente und Daten – "
+        "und erzeugt QR-Codes, Textur- und Noise-Maps.",
+        "Converts files locally – video, audio, images, 3D models, documents and data – and "
+        "creates QR codes, texture and noise maps.",
     ),
     "cli.epilog": (
         "Beispiele:\n"
@@ -239,15 +407,26 @@ MESSAGES: dict[str, tuple[str, str]] = {
         "  omniconvert clip.mp4 --to gif -s start=0:05 -s end=0:12 -s width=640\n"
         "  omniconvert podcast.wav --to mp3 -s normalize=podcast\n"
         "  omniconvert --list bericht.docx\n"
-        "  omniconvert --options clip.mp4 --to gif",
+        "  omniconvert --options clip.mp4 --to gif\n"
+        "  omniconvert --text https://example.com --to qr\n"
+        "  omniconvert --generate noise --to png -s seed=42 -s width=2048\n"
+        "  omniconvert stein.jpg --to normal-map\n"
+        "  omniconvert modell.fbx --to glb",
         "Examples:\n"
         "  omniconvert video.mov --to mp4\n"
         "  omniconvert clip.mp4 --to gif -s start=0:05 -s end=0:12 -s width=640\n"
         "  omniconvert podcast.wav --to mp3 -s normalize=podcast\n"
         "  omniconvert --list report.docx\n"
-        "  omniconvert --options clip.mp4 --to gif",
+        "  omniconvert --options clip.mp4 --to gif\n"
+        "  omniconvert --text https://example.com --to qr\n"
+        "  omniconvert --generate noise --to png -s seed=42 -s width=2048\n"
+        "  omniconvert stone.jpg --to normal-map\n"
+        "  omniconvert model.fbx --to glb",
     ),
-    "cli.help.to": ("Zielformat, z. B. mp4, mp3, png, pdf, xlsx", "target format, e.g. mp4"),
+    "cli.help.to": (
+        "Zielformat, z. B. mp4, mp3, png, pdf, xlsx, glb, qr, normal-map",
+        "target format, e.g. mp4, mp3, png, glb, qr, normal-map",
+    ),
     "cli.help.output": (
         "Ausgabedatei oder -ordner (Standard: neben der Quelle)",
         "output file or folder (default: next to the source)",
@@ -265,6 +444,18 @@ MESSAGES: dict[str, tuple[str, str]] = {
         "add/remove the file manager context menu",
     ),
     "cli.help.quiet": ("keine Fortschrittsausgabe", "no progress output"),
+    "cli.help.text": (
+        "Link oder Text als Quelle, z. B. für --to qr",
+        "link or text as source, e.g. for --to qr",
+    ),
+    "cli.help.generate": (
+        "ohne Quelldatei erzeugen, z. B. noise (mit --to png)",
+        "generate without a source file, e.g. noise (with --to png)",
+    ),
+    "cli.error.source_conflict": (
+        "Entweder Dateien, --text oder --generate angeben.",
+        "Give either files, --text or --generate.",
+    ),
     "cli.error": ("Fehler", "Error"),
     "cli.cancelled": ("Abgebrochen.", "Cancelled."),
     "cli.error.no_files": ("Keine Datei angegeben.", "No file given."),

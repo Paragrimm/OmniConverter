@@ -19,6 +19,7 @@ VIDEO_TARGETS = ("mp4", "mkv", "webm", "mov", "avi")
 AUDIO_SOURCES = ("mp3", "wav", "flac", "ogg", "opus", "m4a", "aac", "aiff", "wma")
 AUDIO_TARGETS = ("mp3", "wav", "flac", "ogg", "opus", "m4a", "aiff")
 LOSSY_AUDIO = ("mp3", "ogg", "opus", "m4a")
+ALPHA_TARGETS = ("webm",)  # VP9/VP8 in WebM can carry an alpha channel
 COVER_ART_TARGETS = ("mp3", "flac", "m4a")
 
 # Loudness targets in LUFS (EBU R128 integrated loudness).
@@ -250,13 +251,17 @@ def video_filters(opts: dict[str, Any], media: MediaInfo | None, encoder: str) -
     return filters
 
 
-def video_codec_args(encoder: str, quality: str) -> list[str]:
+def video_codec_args(encoder: str, quality: str, alpha: bool = False) -> list[str]:
     args = ["-c:v", encoder]
     if encoder == "libx264":
         args += ["-preset", "medium", "-crf", str(_CRF[encoder][quality]), "-pix_fmt", "yuv420p"]
     elif encoder in ("libvpx-vp9", "libvpx"):
         args += ["-crf", str(_CRF[encoder][quality]), "-b:v", "0", "-deadline", "good",
-                 "-cpu-used", "4", "-pix_fmt", "yuv420p"]
+                 "-cpu-used", "4"]
+        if alpha:  # libvpx cannot combine an alpha plane with alternate reference frames
+            args += ["-pix_fmt", "yuva420p", "-auto-alt-ref", "0"]
+        else:
+            args += ["-pix_fmt", "yuv420p"]
         if encoder == "libvpx-vp9":
             args += ["-row-mt", "1"]
     elif encoder == "mpeg4":
@@ -294,7 +299,8 @@ def build_video(
         filters = video_filters(opts, media, encoder)
         if filters:
             args += ["-vf", ",".join(filters)]
-        args += video_codec_args(encoder, opts.get("quality", "medium"))
+        alpha = bool(opts.get("keep_transparency")) and target in ALPHA_TARGETS
+        args += video_codec_args(encoder, opts.get("quality", "medium"), alpha)
         if not remove_audio:
             args += ["-map", "0:a:0?"]
             audio_target = _AUDIO_IN_VIDEO[target]

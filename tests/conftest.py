@@ -17,10 +17,12 @@ _LOCATOR = ToolLocator()
 HAVE_FFMPEG = _LOCATOR.available("ffmpeg") and _LOCATOR.available("ffprobe")
 HAVE_PANDOC = _LOCATOR.available("pandoc")
 HAVE_SOFFICE = _LOCATOR.available("soffice")
+HAVE_BLENDER = _LOCATOR.available("blender")
 
 needs_ffmpeg = pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg/ffprobe not installed")
 needs_pandoc = pytest.mark.skipif(not HAVE_PANDOC, reason="pandoc not installed")
 needs_soffice = pytest.mark.skipif(not HAVE_SOFFICE, reason="LibreOffice not installed")
+needs_blender = pytest.mark.skipif(not HAVE_BLENDER, reason="Blender not installed")
 
 
 @pytest.fixture(autouse=True)

@@ -28,7 +28,7 @@ _ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
 _heif_registered = False
 
 
-def _register_heif() -> None:
+def register_heif() -> None:
     global _heif_registered
     if not _heif_registered:
         try:
@@ -81,7 +81,7 @@ class ImageBackend(Backend):
     def convert(self, request: ConversionRequest, output: Path, ctx: ConversionContext) -> None:
         from PIL import Image, ImageSequence, UnidentifiedImageError
 
-        _register_heif()
+        register_heif()
         ctx.progress(None)
         target = request.target_format.id
         opts = request.options

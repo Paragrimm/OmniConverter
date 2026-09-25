@@ -1,4 +1,4 @@
-"""Discovery of external command-line tools (FFmpeg, Pandoc, LibreOffice).
+"""Discovery of external command-line tools (FFmpeg, Pandoc, LibreOffice, Blender).
 
 Nothing is bundled or downloaded: tools installed on the system are found automatically, and
 for missing ones we show how to install them.
@@ -95,6 +95,19 @@ TOOLS: dict[str, ToolSpec] = {
         winget="TheDocumentFoundation.LibreOffice",
         linux_package="libreoffice",
         url="https://www.libreoffice.org/download/",
+    ),
+    "blender": ToolSpec(
+        "blender",
+        "Blender",
+        ("blender",),
+        (
+            r"%ProgramFiles%\Blender Foundation\Blender*\blender.exe",
+            r"%ProgramFiles(x86)%\Steam\steamapps\common\Blender\blender.exe",
+            r"%USERPROFILE%\scoop\apps\blender\current\blender.exe",
+        ),
+        winget="BlenderFoundation.Blender",
+        linux_package="blender",
+        url="https://www.blender.org/download/",
     ),
 }
 

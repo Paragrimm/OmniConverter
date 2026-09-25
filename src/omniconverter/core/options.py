@@ -38,6 +38,7 @@ class Option:
     # All conditions must hold for the option to be visible/relevant: ((key, (values...)), ...)
     visible_if: tuple[tuple[str, tuple[Any, ...]], ...] = ()
     help: str = ""
+    randomize: bool = False  # INT only: the GUI offers a button for a random value (seeds)
 
     def is_visible(self, values: Mapping[str, Any]) -> bool:
         return all(values.get(key) in allowed for key, allowed in self.visible_if)

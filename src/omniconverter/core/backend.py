@@ -30,11 +30,12 @@ class Conversion:
 
 @dataclass
 class ConversionRequest:
-    source: Path
+    source: Path | None  # None for sources without a file (typed text, generators)
     source_format: Format
     target_format: Format
     options: dict[str, Any] = field(default_factory=dict)
     media: MediaInfo | None = None
+    text: str | None = None  # content of a text source
 
 
 class ConversionContext:
@@ -46,11 +47,16 @@ class ConversionContext:
         work_dir: Path,
         cancel: threading.Event | None = None,
         on_progress: ProgressCallback | None = None,
+        final_path: Path | None = None,
     ) -> None:
         self.locator = locator
         self.work_dir = work_dir
         self.cancel = cancel or threading.Event()
         self._on_progress = on_progress
+        # Where the result ends up; the backend itself writes to a temporary name.
+        self.final_path = final_path
+        # Extra files saved next to the result, e.g. an OBJ's .mtl: {file name: content}.
+        self.companions: dict[str, bytes] = {}
 
     def progress(self, fraction: float | None) -> None:
         """Report progress in ``[0, 1]``; ``None`` means indeterminate."""
@@ -79,6 +85,10 @@ class Backend(ABC):
         self, source: Format, target: Format, media: MediaInfo | None = None
     ) -> list[Option]:
         return []
+
+    def output_stem(self, request: ConversionRequest) -> str | None:
+        """File name (without extension) for sources without a file, e.g. ``noise-42``."""
+        return None
 
     @abstractmethod
     def convert(self, request: ConversionRequest, output: Path, ctx: ConversionContext) -> None:

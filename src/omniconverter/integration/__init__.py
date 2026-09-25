@@ -17,7 +17,7 @@ def supported_source_formats() -> list[Format]:
     from omniconverter.backends import default_backends
 
     ids = {conv.source for b in default_backends() for conv in b.conversions()}
-    return [f for fid, f in FORMATS.items() if fid in ids]
+    return [f for fid, f in FORMATS.items() if fid in ids and f.detect]
 
 
 def launcher_command() -> list[str]:

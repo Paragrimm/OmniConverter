@@ -100,6 +100,30 @@ def test_odd_sized_gif_to_mp4(converter, tmp_path):
     assert (int(video["width"]), int(video["height"])) == (100, 76)
 
 
+def test_transparent_gif_to_webm_keeps_alpha(converter, tmp_path):
+    from PIL import Image
+
+    gif = tmp_path / "owl.gif"
+    frames = []
+    for i in range(4):
+        frame = Image.new("RGBA", (40, 30), (0, 0, 0, 0))
+        frame.paste((255, 200, 0, 255), (5 + i * 5, 5, 20 + i * 5, 25))
+        frames.append(frame)
+    frames[0].save(gif, save_all=True, append_images=frames[1:], duration=100, loop=0,
+                   disposal=2)
+    source = converter.inspect(gif)
+    out = converter.convert(source, get_format("webm"), tmp_path / "owl.webm")
+    (video,) = streams(out, "video")
+    assert video["codec_name"] == "vp9" and video["tags"].get("alpha_mode") == "1"
+    # Decode with libvpx, which reads the alpha plane, and look at a corner and the square.
+    png = tmp_path / "frame.png"
+    ffmpeg("-c:v", "libvpx-vp9", "-i", str(out), "-frames:v", "1", str(png))
+    with Image.open(png) as im:
+        rgba = im.convert("RGBA")
+        assert rgba.getpixel((1, 1))[3] < 16
+        assert rgba.getpixel((12, 15))[3] > 240
+
+
 def test_audio_only_mp4_offers_only_audio_targets(converter, tmp_path):
     m4 = tmp_path / "voice.mp4"
     ffmpeg("-f", "lavfi", "-i", "sine=duration=1", "-c:a", "aac", str(m4))

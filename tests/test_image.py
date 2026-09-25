@@ -91,9 +91,9 @@ def test_other_targets(converter, transparent_png, tmp_path, target):
     out = convert(converter, transparent_png, target, tmp_path)
     assert out.stat().st_size > 0
     if target != "pdf":
-        from omniconverter.backends.image import _register_heif
+        from omniconverter.backends.image import register_heif
 
-        _register_heif()
+        register_heif()
         with Image.open(out) as im:
             assert im.size == (120, 60)
 
