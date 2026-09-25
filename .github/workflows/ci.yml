@@ -1,0 +1,184 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.13"]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install converters and Qt runtime libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg pandoc \
+            libreoffice-writer libreoffice-calc \
+            libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+
+      - name: Install converters (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg pandoc --no-progress -y
+
+      - name: Install LibreOffice (Windows, one job only – it is large)
+        if: runner.os == 'Windows' && matrix.python == '3.13'
+        run: choco install libreoffice-fresh --no-progress -y
+
+      - name: Install OmniConverter
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Show detected tools
+        run: omniconvert --tools
+
+      - name: Test
+        run: python -m pytest -v
+
+  package:
+    name: Package (${{ matrix.name }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+          - name: Linux
+            os: ubuntu-22.04  # older glibc, so the packages run on more distributions
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build tools and libraries to bundle (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg pandoc \
+            libegl1 libgl1 libfontconfig1 libdbus-1-3 libxkbcommon0 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 \
+            libxcb-util1 libxcb-xkb1 libxcb-shape0 libxcb-randr0 libxcb-xfixes0 \
+            libxcb-sync1 libxcb-shm0 libxcb-xinerama0
+
+      - name: Install build tools (Windows)
+        if: runner.os == 'Windows'
+        run: choco install innosetup ffmpeg pandoc --no-progress -y
+
+      - name: Install
+        run: python -m pip install -e ".[build]"
+
+      - name: Build packages
+        run: python packaging/build.py
+
+      - name: Smoke test – portable, AppImage, .deb (Linux)
+        if: runner.os == 'Linux'
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          mkdir smoke
+          tar -xzf dist/release/*-portable.tar.gz -C smoke
+          python packaging/smoke_test.py smoke/OmniConverter/OmniConverter --gui
+          python packaging/smoke_test.py dist/release/*.AppImage --gui
+          sudo apt-get install -y --no-install-recommends ./dist/release/*.deb
+          python packaging/smoke_test.py /usr/bin/omniconverter --gui
+
+      - name: Smoke test – portable, installer, uninstaller (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          Expand-Archive (Get-ChildItem dist/release/*-portable.zip)[0].FullName -DestinationPath smoke
+          python packaging/smoke_test.py smoke/OmniConverter/omniconvert.exe `
+            --gui --gui-command smoke/OmniConverter/OmniConverter.exe
+
+          $setup = (Get-ChildItem dist/release/*-setup.exe)[0].FullName
+          Start-Process -Wait -FilePath $setup -ArgumentList `
+            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/TASKS=contextmenu', '/LOG=install.log'
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\OmniConverter'
+          python packaging/smoke_test.py (Join-Path $app 'omniconvert.exe') `
+            --gui --gui-command (Join-Path $app 'OmniConverter.exe')
+          $menu = 'HKCU:\Software\Classes\SystemFileAssociations\.mp4\shell\OmniConverter'
+          if (-not (Test-Path "$menu\command")) { throw 'context menu was not registered' }
+          Get-ItemProperty "$menu\command" | Format-List
+
+          Start-Process -Wait -FilePath (Join-Path $app 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES'
+          for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $app 'omniconvert.exe')); $i++) { Start-Sleep 1 }
+          if (Test-Path (Join-Path $app 'omniconvert.exe')) { throw 'uninstaller left the program behind' }
+          if (Test-Path $menu) { throw 'uninstaller left the context menu behind' }
+          Write-Host 'Installer and uninstaller work.'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OmniConverter-${{ matrix.name }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match the version in the code
+        run: |
+          version=$(python3 -c "import re, pathlib; print(re.search(r'__version__ = \"(.+?)\"', pathlib.Path('src/omniconverter/__init__.py').read_text()).group(1))")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match __version__ $version"
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: OmniConverter-*
+          path: release
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd release
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --title "OmniConverter ${GITHUB_REF_NAME#v}" \
+            --notes-file packaging/release-notes.md --generate-notes $prerelease
