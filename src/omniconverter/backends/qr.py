@@ -7,7 +7,14 @@ import re
 from collections.abc import Iterable
 from pathlib import Path
 
-from omniconverter.core.backend import Backend, Conversion, ConversionContext, ConversionRequest
+from omniconverter.backends.preview import image_frames
+from omniconverter.core.backend import (
+    Backend,
+    Conversion,
+    ConversionContext,
+    ConversionRequest,
+    Preview,
+)
 from omniconverter.core.errors import ConversionError
 from omniconverter.core.formats import Format
 from omniconverter.core.options import Kind, Option, when
@@ -55,27 +62,46 @@ class QRBackend(Backend):
         return "qr-code"
 
     def convert(self, request: ConversionRequest, output: Path, ctx: ConversionContext) -> None:
-        import segno
-
-        payload = qr_payload(request)
-        opts = request.options
-        level = opts.get("error_correction", "m")
-        try:
-            code = segno.make(payload, error=level, micro=False)
-        except segno.DataOverflowError:
-            size = len(payload.encode("utf-8"))
-            raise ConversionError(t("error.qr_too_large", size=size, limit=CAPACITY[level],
-                                    max=CAPACITY["l"])) from None
-        border = int(opts.get("border", 4))
-        light = None if opts.get("transparent") else opts.get("light", "#ffffff")
-        width, _height = code.symbol_size(scale=1, border=border)
-        scale = max(1, round(int(opts.get("size", 1024)) / width))
         kind = "svg" if request.target_format.id == "qr-svg" else "png"
-        try:
-            code.save(str(output), kind=kind, scale=scale, border=border,
-                      dark=opts.get("dark", "#000000"), light=light)
-        except (OSError, ValueError) as exc:
-            raise ConversionError(t("error.qr_failed"), str(exc)) from exc
+        _save(request, output, kind)
+
+    def can_preview(self, source: Format, target: Format) -> bool:
+        return True
+
+    def preview(self, request: ConversionRequest, ctx: ConversionContext) -> Preview:
+        result = ctx.work_dir / f"result.{request.target_format.extension}"
+        self.convert(request, result, ctx)
+        shown = result
+        if request.target_format.id == "qr-svg":  # the same code as PNG, for the preview only
+            shown = ctx.work_dir / "shown.png"
+            _save(request, shown, "png")
+        frames, _durations, (width, height) = image_frames(shown, ctx, animated=False)
+        vector = request.target_format.id == "qr-svg"
+        return Preview(frames, width=None if vector else width,
+                       height=None if vector else height, size_bytes=result.stat().st_size)
+
+
+def _save(request: ConversionRequest, output: Path, kind: str) -> None:
+    import segno
+
+    payload = qr_payload(request)
+    opts = request.options
+    level = opts.get("error_correction", "m")
+    try:
+        code = segno.make(payload, error=level, micro=False)
+    except segno.DataOverflowError:
+        size = len(payload.encode("utf-8"))
+        raise ConversionError(t("error.qr_too_large", size=size, limit=CAPACITY[level],
+                                max=CAPACITY["l"])) from None
+    border = int(opts.get("border", 4))
+    light = None if opts.get("transparent") else opts.get("light", "#ffffff")
+    width, _height = code.symbol_size(scale=1, border=border)
+    scale = max(1, round(int(opts.get("size", 1024)) / width))
+    try:
+        code.save(str(output), kind=kind, scale=scale, border=border,
+                  dark=opts.get("dark", "#000000"), light=light)
+    except (OSError, ValueError) as exc:
+        raise ConversionError(t("error.qr_failed"), str(exc)) from exc
 
 
 def qr_payload(request: ConversionRequest) -> str:

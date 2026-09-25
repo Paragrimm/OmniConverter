@@ -6,7 +6,14 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from omniconverter.core.backend import Backend, Conversion, ConversionContext, ConversionRequest
+from omniconverter.backends.preview import image_frames, original_image, save_image
+from omniconverter.core.backend import (
+    Backend,
+    Conversion,
+    ConversionContext,
+    ConversionRequest,
+    Preview,
+)
 from omniconverter.core.errors import ConversionError
 from omniconverter.core.formats import Format
 from omniconverter.core.options import Kind, Option, when
@@ -92,6 +99,38 @@ class ImageBackend(Backend):
         return opts
 
     def convert(self, request: ConversionRequest, output: Path, ctx: ConversionContext) -> None:
+        frames, save = self._render(request, ctx)
+        _save(frames, save, request.target_format.id, output)
+
+    def can_preview(self, source: Format, target: Format) -> bool:
+        return True
+
+    def preview(self, request: ConversionRequest, ctx: ConversionContext) -> Preview:
+        """The real result (exact file size), decoded again to show artifacts and palettes."""
+        assert request.source is not None
+        target = request.target_format.id
+        frames, save = self._render(request, ctx)
+        result = ctx.work_dir / f"result.{request.target_format.extension}"
+        _save(frames, save, target, result)
+        ctx.check_cancelled()
+        note = ""
+        if target == "pdf":  # Pillow cannot read PDFs: show the pages as they went in
+            shown = [save_image(frames[0], ctx.work_dir / "frame-0000.png")]
+            durations: list[int] = []
+            width, height = frames[0].size
+            if len(frames) > 1:
+                note = t("preview.pages", n=len(frames))
+        else:
+            shown, durations, (width, height) = image_frames(result, ctx,
+                                                             animated=target in _ANIMATED)
+        opts = request.options
+        original = original_image(request.source, ctx, lambda im: _resize(im, opts))
+        return Preview(shown, durations, original=original, width=width, height=height,
+                       size_bytes=result.stat().st_size, note=note)
+
+    def _render(self, request: ConversionRequest, ctx: ConversionContext
+                ) -> tuple[list[Any], dict[str, Any]]:
+        """The frames to save and the arguments for Pillow's ``save``."""
         from PIL import Image, ImageSequence, UnidentifiedImageError
 
         register_heif()
@@ -110,8 +149,9 @@ class ImageBackend(Backend):
                 frames, durations = [], []
                 for frame in source_frames:
                     ctx.check_cancelled()
-                    durations.append(frame.info.get("duration", info.get("duration", 100)))
                     frames.append(_prepare(frame.copy(), target, opts))
+                    # Only a loaded frame knows its duration (e.g. the first one of a WebP).
+                    durations.append(frame.info.get("duration", info.get("duration", 100)))
         except (UnidentifiedImageError, OSError, ValueError) as exc:
             raise ConversionError(t("error.image_failed"), str(exc)) from exc
         colors = opts.get("colors", "all")
@@ -151,10 +191,14 @@ class ImageBackend(Backend):
                 save.update(duration=durations, loop=info.get("loop", 0))
                 if target == "gif":
                     save["disposal"] = 2
-        try:
-            frames[0].save(output, format=_PIL_FORMAT[target], **save)
-        except (OSError, ValueError, KeyError) as exc:
-            raise ConversionError(t("error.image_failed"), str(exc)) from exc
+        return frames, save
+
+
+def _save(frames: list[Any], save: dict[str, Any], target: str, output: Path) -> None:
+    try:
+        frames[0].save(output, format=_PIL_FORMAT[target], **save)
+    except (OSError, ValueError, KeyError) as exc:
+        raise ConversionError(t("error.image_failed"), str(exc)) from exc
 
 
 def _prepare(im: Any, target: str, opts: dict[str, Any]) -> Any:

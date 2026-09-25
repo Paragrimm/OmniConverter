@@ -8,6 +8,7 @@ from omniconverter.core.probe import MediaInfo, parse_probe
 
 MEDIA = MediaInfo(duration=10.0, has_video=True, has_audio=True, width=1920, height=1080,
                   sample_rate=44100)
+MEDIA_LONG = MediaInfo(duration=60.0, has_video=True, width=1920, height=1080, fps=25.0)
 ENCODERS = {"libx264", "libvpx-vp9", "aac", "libopus", "libmp3lame", "libvorbis", "flac",
             "pcm_s16le", "pcm_s16be", "mpeg4"}
 
@@ -234,3 +235,75 @@ def test_gif_sources_get_gif_options():
     assert "keep_transparency" not in mp4
     video = {o.key for o in backend.options(get_format("mp4"), get_format("webm"))}
     assert "keep_transparency" not in video and "normalize" in video
+
+
+# -- preview -------------------------------------------------------------------------------
+
+
+def test_preview_plan_real_time_for_short_parts():
+    plan = fa.preview_plan({"start": 1.0, "end": 3.0}, MediaInfo(duration=5.0, fps=30.0))
+    assert (plan.start, plan.duration, plan.end) == (1.0, 2.0, 3.0)
+    assert plan.fps == 15 and plan.frame_ms == 67 and not plan.timelapse
+    slow = fa.preview_plan({"fps": 10}, MediaInfo(duration=5.0, fps=30.0))
+    assert slow.fps == 10 and slow.frame_ms == 100  # what the result will look like
+
+
+def test_preview_plan_time_lapse_for_long_parts():
+    plan = fa.preview_plan({"start": 60.0}, MediaInfo(duration=660.0, fps=25.0))
+    assert plan.timelapse and plan.duration == 600.0
+    assert plan.fps * plan.duration == pytest.approx(fa.PREVIEW_FRAMES)
+    assert plan.end_known
+
+
+def test_preview_plan_without_known_length_shows_the_beginning():
+    plan = fa.preview_plan({}, None)
+    assert plan.duration == fa.PREVIEW_REALTIME_S and not plan.end_known
+    with pytest.raises(ConversionError):
+        fa.preview_plan({"start": 4.0, "end": 2.0}, MEDIA)
+
+
+def test_preview_frames_args():
+    plan = fa.preview_plan({"start": 2.0, "end": 4.0}, MEDIA)
+    args = fa.build_preview_frames("ffmpeg", "in.mp4", "f-%04d.jpg", plan, 640)
+    assert after(args, "-ss") == "2" and after(args, "-t") == "2"
+    assert args.index("-ss") < args.index("-i")  # fast input seek
+    assert after(args, "-vf") == "fps=15,scale=640:-2:flags=bicubic"
+    assert after(args, "-protocol_whitelist") == "file,pipe"
+    assert "-skip_frame" not in args and after(args, "-q:v") == "3"
+    assert args[-1] == "f-%04d.jpg"
+
+
+def test_time_lapse_decodes_only_keyframes_and_keeps_alpha():
+    plan = fa.preview_plan({}, MediaInfo(duration=3600.0, fps=30.0))
+    args = fa.build_preview_frames("ffmpeg", "in.gif", "f-%04d.png", plan, 320, alpha=True)
+    assert after(args, "-skip_frame") == "nokey"
+    assert args.index("-skip_frame") < args.index("-i")
+    assert after(args, "-pix_fmt") == "rgba" and "-q:v" not in args
+    assert after(args, "-frames:v") == str(fa.PREVIEW_FRAMES)
+
+
+def test_edge_frames_of_a_part():
+    plan = fa.preview_plan({"start": 10.0, "end": 50.0}, MEDIA_LONG)
+    first = fa.build_edge_frame("ffmpeg", "in", "first.jpg", plan, 640, last=False)
+    assert after(first, "-ss") == "10" and after(first, "-frames:v") == "1"
+    last = fa.build_edge_frame("ffmpeg", "in", "last.jpg", plan, 640, last=True)
+    # Seeking to the very end would miss the last frame: decode the last second instead.
+    assert after(last, "-ss") == "49" and after(last, "-t") == "1"
+    assert after(last, "-update") == "1" and "-frames:v" not in last
+
+
+@pytest.mark.parametrize(("opts", "size"), [
+    ({}, (1920, 1080)),
+    ({"resolution": 720}, (1280, 720)),
+    ({"resolution": "custom", "width": 500}, (500, 282)),
+    ({"fast": True, "resolution": 480}, (1920, 1080)),  # stream copy keeps the size
+])
+def test_video_output_size(opts, size):
+    assert fa.video_output_size(opts, MEDIA) == size
+
+
+def test_video_output_size_odd_and_unknown():
+    odd = MediaInfo(duration=1.0, has_video=True, width=121, height=81)
+    assert fa.video_output_size({}, odd) == (120, 80)
+    assert fa.video_output_size({}, None) is None
+    assert fa.preview_width(odd) == 120 and fa.preview_width(None) == fa.PREVIEW_WIDTH

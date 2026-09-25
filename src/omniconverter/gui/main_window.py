@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSplitter,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -36,6 +37,7 @@ from omniconverter.core.formats import CATEGORY_ORDER, Category, Format
 from omniconverter.core.registry import TargetChoice
 from omniconverter.core.tools import TOOLS, install_hint
 from omniconverter.gui.options_form import OptionsForm
+from omniconverter.gui.preview import PreviewPanel
 from omniconverter.gui.settings_dialog import SettingsDialog
 from omniconverter.gui.widgets import (
     DropArea,
@@ -57,6 +59,7 @@ from omniconverter.i18n import t
 from omniconverter.integration import supported_source_formats
 
 MERGE_WINDOW_S = 3.0  # files arriving this soon after the last ones are added to them
+PREVIEW_WINDOW_WIDTH = 1060  # the window grows to this once, when the preview first appears
 
 
 def file_filter() -> str:
@@ -177,7 +180,16 @@ class ConfigPage(QWidget):
         self.body_layout.setContentsMargins(0, 0, 6, 0)
         self.body_layout.setSpacing(10)
         scroll.setWidget(self.body)
-        outer.addWidget(scroll, 1)
+        self.preview = PreviewPanel(window.converter)
+        self.preview.hide()  # only for targets with a preview
+        self._preview_sized = False
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.addWidget(scroll)
+        self.splitter.addWidget(self.preview)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 1)
+        outer.addWidget(self.splitter, 1)
 
         self.targets_box = QWidget()
         self.targets_layout = QVBoxLayout(self.targets_box)
@@ -237,6 +249,7 @@ class ConfigPage(QWidget):
         self.target = None
         self.custom_output = None
         self.note.setText(note)
+        self.preview.clear()
         self._fill_header()
         self._fill_targets(choices)
         self._set_form(None)
@@ -246,6 +259,8 @@ class ConfigPage(QWidget):
                     button.setChecked(True)
                     self._select(button.property("format"))
         self._update_output()
+        if self.target is None:
+            self.preview.hide()
 
     def _fill_header(self) -> None:
         is_text = len(self.sources) == 1 and self.sources[0].format.id == "text"
@@ -286,6 +301,7 @@ class ConfigPage(QWidget):
             self.subtitle.setText(t("gui.qr_bytes", n=self.sources[0].size))
             self._update_convert_button()
             self._update_output()
+            self._update_preview()
 
     def _fill_targets(self, choices: list[TargetChoice]) -> None:
         for button in self.group.buttons():
@@ -345,6 +361,7 @@ class ConfigPage(QWidget):
             options = []
         self._set_form(OptionsForm(options, self.sources[0].media))
         self._update_output()
+        self._update_preview()
 
     def _set_form(self, form: OptionsForm | None) -> None:
         if self.form is not None:
@@ -356,6 +373,7 @@ class ConfigPage(QWidget):
         if form is not None:
             form.changed.connect(self._update_convert_button)
             form.changed.connect(self._update_output)  # e.g. the seed is part of the name
+            form.changed.connect(self._update_preview)
             self.options_holder.addWidget(form)
         self._update_convert_button()
 
@@ -367,6 +385,26 @@ class ConfigPage(QWidget):
 
     def _values(self) -> dict:
         return self.form.conversion_values() if self.form and self.form.is_valid() else {}
+
+    # -- preview ------------------------------------------------------------------------------
+
+    def _update_preview(self) -> None:
+        converter = self.window_.converter
+        if not self.sources or self.target is None or not converter.can_preview(
+                self.sources[0], self.target):
+            self.preview.clear()
+            self.preview.hide()
+            return
+        if self.preview.isHidden():
+            self.preview.show()
+            self.window_.make_room_for_preview()
+            if not self._preview_sized:  # later, keep what the user set
+                self._preview_sized = True
+                half = max(1, self.splitter.width() // 2)
+                self.splitter.setSizes([half, half])
+        values = None if self.form is not None and not self.form.is_valid() else self._values()
+        label = self.sources[0].name if len(self.sources) > 1 else ""
+        self.preview.request(self.sources[0], self.target, values, label)
 
     # -- output location --------------------------------------------------------------------
 
@@ -574,6 +612,7 @@ class MainWindow(QMainWindow):
         self._last_open = 0.0
         self._outputs: list[Path] = []
         self._errors: list[tuple[str, str, str]] = []
+        self._grown_for_preview = False
 
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(app_icon())
@@ -602,8 +641,21 @@ class MainWindow(QMainWindow):
     def reset(self) -> None:
         if self.busy():
             return
+        self.config_page.preview.clear()
         self.drop_page.show_error("")
         self.stack.setCurrentWidget(self.drop_page)
+
+    def make_room_for_preview(self) -> None:
+        """Widen the window once for the preview column (never when maximized)."""
+        if self._grown_for_preview or self.isMaximized() or self.isFullScreen():
+            return
+        self._grown_for_preview = True
+        screen = self.screen()
+        width = PREVIEW_WINDOW_WIDTH
+        if screen is not None:
+            width = min(width, screen.availableGeometry().width() - 40)
+        if width > self.width():
+            self.resize(width, self.height())
 
     def back_to_config(self) -> None:
         page = self.config_page
@@ -611,6 +663,7 @@ class MainWindow(QMainWindow):
             # The chosen file holds the last result now; a second run must not overwrite it.
             page.custom_output = unique_path(page.custom_output)
         page._update_output()
+        page.preview.resume()
         self.stack.setCurrentWidget(page)
 
     def _escape(self) -> None:
@@ -729,6 +782,7 @@ class MainWindow(QMainWindow):
         if self.busy() or self.config_page.target is None:
             return
         jobs = self.config_page.jobs()
+        self.config_page.preview.stop()  # the conversion gets the computer's full attention
         self._outputs, self._errors = [], []
         worker = ConversionWorker(self.converter, jobs)
         worker.job_started.connect(lambda i: self._on_job_started(jobs, i))
@@ -765,6 +819,7 @@ class MainWindow(QMainWindow):
             self.config_page.note.setText(t("gui.cancelled"))
             self.stack.setCurrentWidget(self.config_page)
             self.config_page._update_output()
+            self.config_page.preview.resume()
             return
         self.result_page.show_result(self._outputs, self._errors)
         self.stack.setCurrentWidget(self.result_page)
@@ -772,6 +827,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self.config_page._update_output)
 
     def closeEvent(self, event) -> None:
+        self.config_page.preview.shutdown()
         if self.worker is not None:
             self.worker.cancel()
             self.worker.wait(10_000)

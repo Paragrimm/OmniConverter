@@ -86,6 +86,15 @@ def test_animated_gif_to_webp_keeps_frames(converter, tmp_path):
         assert getattr(im, "n_frames", 1) == 1
 
 
+def test_animated_webp_keeps_the_first_frames_duration(converter, tmp_path):
+    src = tmp_path / "anim.webp"
+    frames = [Image.new("RGB", (40, 30), c) for c in ("red", "green", "blue")]
+    frames[0].save(src, save_all=True, append_images=frames[1:], duration=250, loop=0)
+    out = convert(converter, src, "gif", tmp_path)
+    with Image.open(out) as im:
+        assert im.info["duration"] == 250  # Pillow only knows it once the frame is loaded
+
+
 @pytest.mark.parametrize("target", ["avif", "heic", "tiff", "bmp", "gif", "pdf"])
 def test_other_targets(converter, transparent_png, tmp_path, target):
     out = convert(converter, transparent_png, target, tmp_path)

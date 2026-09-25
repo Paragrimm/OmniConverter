@@ -353,3 +353,117 @@ def test_batch_of_mixed_audio_formats(window, qtbot, tmp_path):
     result = run_batch(window, qtbot, files, "mp3")
     assert sorted(p.name for p in result.outputs) == ["a.mp3", "b.mp3", "c.mp3"]
     assert "3 files" in result.message.text()
+
+
+# -- preview -------------------------------------------------------------------------------
+
+
+def wait_for_preview(qtbot, panel):
+    qtbot.waitUntil(lambda: panel.rendered is not None and not panel.busy(), timeout=20000)
+
+
+def test_preview_follows_the_options(window, qtbot, tmp_path):
+    src = tmp_path / "photo.png"
+    Image.merge("RGB", [Image.effect_noise((160, 120), 70) for _ in range(3)]).save(src)
+    window.open_files([str(src)])
+    page, panel = window.config_page, window.config_page.preview
+    assert panel.isHidden()  # nothing to show before a target is chosen
+
+    width_before = window.width()
+    target_button(window, "jpg").click()
+    assert not panel.isHidden()
+    assert window.width() > width_before  # the window made room, once
+    wait_for_preview(qtbot, panel)
+    assert panel.info.text().startswith("160×120 · ")
+    assert panel.original_button.isVisibleTo(panel) and not panel.slider.isVisibleTo(panel)
+    big = panel.rendered.preview.size_bytes
+
+    page.form.widget("quality").setValue(10)
+    qtbot.waitUntil(lambda: panel.rendered.preview.size_bytes < big, timeout=20000)
+    panel.original_button.click()
+    assert panel.canvas.image is not None and not panel.canvas.image.isNull()
+    panel.zoom.click()
+    assert panel.canvas.actual_size
+
+
+def test_no_preview_for_data_and_after_going_back_to_the_start(window, qtbot, tmp_path):
+    src = tmp_path / "picture.png"
+    Image.new("RGB", (16, 16), "teal").save(src)
+    window.open_files([str(src)])
+    target_button(window, "webp").click()
+    panel = window.config_page.preview
+    wait_for_preview(qtbot, panel)
+    window.reset()
+    assert panel.rendered is None
+
+    data = tmp_path / "a.json"
+    data.write_text('[{"x": 1}]')
+    window.open_files([str(data)])
+    target_button(window, "yaml").click()
+    assert panel.isHidden()
+
+
+def test_preview_waits_for_valid_input_and_reports_errors(window, qtbot, pictures):
+    window.drop_page.noise_button.click()
+    target_button(window, "png").click()
+    panel = window.config_page.preview
+    for key, value in (("width", 64), ("height", 32), ("scale", 16)):
+        window.config_page.form.widget(key).setValue(value)
+    wait_for_preview(qtbot, panel)
+    assert panel.info.text().startswith("64×32 · ") and panel.info.text().endswith("B")
+    assert not panel.original_button.isVisibleTo(panel)  # nothing to compare with
+
+    window.open_text("https://example.com")
+    target_button(window, "qr-png").click()
+    wait_for_preview(qtbot, panel)
+    window.config_page.text_edit.setPlainText("   ")
+    qtbot.waitUntil(lambda: panel.info.property("error") is True, timeout=20000)
+    assert panel.canvas.image is None
+
+
+@needs_ffmpeg
+def test_video_preview_plays_the_chosen_part(window, qtbot, sample_video):
+    window.open_files([str(sample_video)])
+    target_button(window, "mp4").click()
+    page, panel = window.config_page, window.config_page.preview
+    page.form.widget("start").setText("0:00.5")
+    page.form.widget("end").setText("0:1x")  # half-typed: the preview waits
+    assert panel.info.text() == "The preview waits for valid input."
+    page.form.widget("end").setText("0:01.5")
+    wait_for_preview(qtbot, panel)
+    assert panel.info.text().startswith("0:00.5–0:01.5 · 320×240")
+    assert panel.slider.isVisibleTo(panel) and panel.slider.maximum() >= 12
+    assert not panel.original_button.isVisibleTo(panel)
+    qtbot.waitUntil(lambda: panel._index > 2, timeout=5000)  # it plays
+    panel.slider.setValue(0)  # scrubbing pauses on that frame
+    assert panel.time.text() == "0:00.5" and not panel._playing
+
+    page.convert_button.click()  # the conversion stops the preview and runs as usual
+    qtbot.waitUntil(lambda: window.stack.currentWidget() is window.result_page, timeout=30000)
+
+
+def test_preview_interrupted_by_a_conversion_resumes_afterwards(window, qtbot, tmp_path):
+    src = tmp_path / "picture.png"
+    Image.new("RGB", (32, 32), "teal").save(src)
+    window.open_files([str(src)])
+    target_button(window, "png").click()
+    page, panel = window.config_page, window.config_page.preview
+    page.convert_button.click()  # before the preview had its turn
+    qtbot.waitUntil(lambda: window.stack.currentWidget() is window.result_page, timeout=10000)
+    assert panel.rendered is None
+    window.result_page.again_button.click()
+    wait_for_preview(qtbot, panel)
+    assert panel.info.text().startswith("32×32")
+
+
+def test_frames_qt_cannot_read_become_png():
+    import io
+
+    from PySide6.QtGui import QImage
+
+    from omniconverter.gui.preview import as_png
+
+    tga = io.BytesIO()
+    Image.new("RGB", (8, 4), "teal").save(tga, format="TGA")  # stands in for a missing plugin
+    data = as_png(tga.getvalue())
+    assert data.startswith(b"\x89PNG") and QImage.fromData(data).size().width() == 8
