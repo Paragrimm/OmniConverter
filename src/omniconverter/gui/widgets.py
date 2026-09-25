@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtGui import QDesktopServices, QIcon, QMovie, QPixmap
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -23,6 +23,9 @@ from PySide6.QtWidgets import (
 from omniconverter.i18n import current_language, t
 from omniconverter.integration import RESOURCES
 from omniconverter.runtime import child_env
+
+EMOTE_CREDIT_URL = "https://roamingowl.itch.io/owlish-emotes"
+EMOTE_CREDIT_HTML = f'Emotes by <a href="{EMOTE_CREDIT_URL}">RoamingOwl</a>'
 
 
 def app_icon() -> QIcon:
@@ -140,10 +143,66 @@ class FlowLayout(QLayout):
         return y + line_height - rect.y()
 
 
+def generated_output_dir() -> Path:
+    """Default folder for results without a source file (QR codes, noise maps)."""
+    from platformdirs import user_pictures_dir
+
+    pictures = Path(user_pictures_dir())
+    return pictures if pictures.is_dir() else Path.home()
+
+
+class EmoteLabel(QLabel):
+    """An animated owl emote (see resources/emotes), crisp on HiDPI, playing while visible."""
+
+    def __init__(self, name: str, size: int = 128, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setFixedSize(size, size)
+        self._size = size
+        self._frames: dict[tuple[int, float], QPixmap] = {}
+        self.movie_ = QMovie(str(RESOURCES / "emotes" / f"{name}.gif"), parent=self)
+        self.movie_.setCacheMode(QMovie.CacheMode.CacheAll)
+        self.movie_.frameChanged.connect(self._show_frame)
+
+    def is_valid(self) -> bool:
+        return self.movie_.isValid()
+
+    def _show_frame(self, number: int) -> None:
+        ratio = self.devicePixelRatioF()
+        key = (number, ratio)
+        if key not in self._frames:
+            side = round(self._size * ratio)
+            pixmap = self.movie_.currentPixmap().scaled(
+                side, side, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            pixmap.setDevicePixelRatio(ratio)
+            self._frames[key] = pixmap
+        self.setPixmap(self._frames[key])
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self.is_valid():
+            self.movie_.start()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self.movie_.stop()
+
+
+def emote_credit() -> QLabel:
+    label = QLabel(EMOTE_CREDIT_HTML)
+    label.setObjectName("Credit")
+    label.setTextFormat(Qt.TextFormat.RichText)
+    label.setOpenExternalLinks(True)
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    return label
+
+
 class DropArea(QFrame):
     """The big "drop a file here or click" area on the start page."""
 
     files_chosen = Signal(list)
+    text_dropped = Signal(str)  # a link from the browser or dragged text
 
     def __init__(self, file_filter: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -184,7 +243,7 @@ class DropArea(QFrame):
             self.files_chosen.emit(paths)
 
     def dragEnterEvent(self, event) -> None:
-        if event.mimeData().hasUrls():
+        if event.mimeData().hasUrls() or event.mimeData().hasText():
             event.acceptProposedAction()
             self._set_active(True)
 
@@ -194,13 +253,25 @@ class DropArea(QFrame):
     def dropEvent(self, event) -> None:
         self._set_active(False)
         paths = local_paths(event.mimeData())
+        text = "" if paths else dropped_text(event.mimeData())
         if paths:
             event.acceptProposedAction()
             self.files_chosen.emit(paths)
+        elif text:
+            event.acceptProposedAction()
+            self.text_dropped.emit(text)
 
 
 def local_paths(mime) -> list[str]:
     return [u.toLocalFile() for u in mime.urls() if u.isLocalFile() and u.toLocalFile()]
+
+
+def dropped_text(mime) -> str:
+    """Web links or plain text (not files) from a drop or the clipboard."""
+    links = [u.toString() for u in mime.urls() if not u.isLocalFile()]
+    if links:
+        return "\n".join(links)
+    return mime.text().strip() if mime.hasText() and not mime.hasUrls() else ""
 
 
 def hline() -> QFrame:

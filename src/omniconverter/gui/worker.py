@@ -10,7 +10,7 @@ from typing import Any
 
 from PySide6.QtCore import QThread, Signal
 
-from omniconverter.core.converter import Converter, SourceFile, default_output_path
+from omniconverter.core.converter import Converter, SourceFile
 from omniconverter.core.errors import Cancelled, ConversionError
 from omniconverter.core.formats import Format
 
@@ -47,8 +47,12 @@ class ConversionWorker(QThread):
                 self.cancelled = True
                 return
             self.job_started.emit(index)
-            output = job.output or default_output_path(job.source.path, job.target,
-                                                       job.output_dir)
+            try:
+                output = job.output or self.converter.output_path(
+                    job.source, job.target, job.options, job.output_dir)
+            except ConversionError as exc:
+                self.job_failed.emit(index, exc.message, exc.details)
+                continue
 
             def report(fraction: float | None, index: int = index) -> None:
                 self.progress.emit(index, -1.0 if fraction is None else fraction)

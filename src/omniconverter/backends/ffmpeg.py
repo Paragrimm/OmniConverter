@@ -116,6 +116,32 @@ def video_options() -> list[Option]:
     ]
 
 
+def gif_video_options(target: str) -> list[Option]:
+    """Animated GIF → video: no audio, no stream copy; WebM can keep the transparency."""
+    opts = [
+        *trim_options(),
+        Option(
+            "resolution", t("opt.resolution"), Kind.CHOICE, "original",
+            choices=(("original", t("opt.original")),
+                     *((h, f"{h}p") for h in (1080, 720, 480, 360)),
+                     ("custom", t("opt.custom"))),
+        ),
+        Option("width", t("opt.width"), Kind.INT, 480, minimum=16, maximum=7680, suffix=" px",
+               visible_if=when("resolution", "custom")),
+        Option(
+            "quality", t("opt.quality"), Kind.CHOICE, "medium",
+            choices=tuple((q, t(f"opt.quality.{q}")) for q in ("high", "medium", "small")),
+        ),
+    ]
+    if target in fa.ALPHA_TARGETS:
+        opts.append(Option("keep_transparency", t("opt.keep_transparency"), Kind.BOOL, True,
+                           help=t("opt.keep_transparency_help")))
+    opts.append(Option("fps", t("opt.fps"), Kind.CHOICE, "original", advanced=True,
+                       choices=(("original", t("opt.original")),
+                                *((f, str(f)) for f in (60, 50, 30, 25, 24, 15)))))
+    return opts
+
+
 def gif_options(source_is_gif: bool) -> list[Option]:
     return [
         *trim_options(),
@@ -207,6 +233,8 @@ class FFmpegVideoBackend(_FFmpegBase):
             return gif_options(source.id == "gif")
         if target.id in fa.AUDIO_TARGETS:
             return audio_options(target.id)
+        if source.id == "gif":
+            return gif_video_options(target.id)
         return video_options()
 
     def convert(self, request: ConversionRequest, output: Path, ctx: ConversionContext) -> None:

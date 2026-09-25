@@ -11,10 +11,14 @@ class Category(StrEnum):
     VIDEO = "video"
     AUDIO = "audio"
     IMAGE = "image"
+    TEXTURE = "texture"  # maps derived from an image (normal, specular)
+    QR = "qr"
+    MODEL = "model"
     DOCUMENT = "document"
     SPREADSHEET = "spreadsheet"
     PRESENTATION = "presentation"
     DATA = "data"
+    GENERATOR = "generator"  # sources without a file (typed text, noise); never a target
 
 
 # Order in which categories are presented to the user.
@@ -28,18 +32,21 @@ class Format:
     category: Category
     extensions: tuple[str, ...]
     mime: tuple[str, ...] = ()
+    name_suffix: str = ""  # appended to the output name, e.g. "wall_normal.png"
+    detect: bool = True  # False: never recognized by extension (derived targets, generators)
 
     @property
     def extension(self) -> str:
         """Canonical extension used for output files."""
-        return self.extensions[0]
+        return self.extensions[0] if self.extensions else ""
 
 
-def _f(id_: str, label: str, cat: Category, exts: str, mime: str = "") -> Format:
-    return Format(id_, label, cat, tuple(exts.split()), tuple(mime.split()))
+def _f(id_: str, label: str, cat: Category, exts: str, mime: str = "", *, suffix: str = "",
+       detect: bool = True) -> Format:
+    return Format(id_, label, cat, tuple(exts.split()), tuple(mime.split()), suffix, detect)
 
 
-V, A, I, D, S, P, J = (  # noqa: E741
+V, A, I, D, S, P, J, M = (  # noqa: E741
     Category.VIDEO,
     Category.AUDIO,
     Category.IMAGE,
@@ -47,6 +54,7 @@ V, A, I, D, S, P, J = (  # noqa: E741
     Category.SPREADSHEET,
     Category.PRESENTATION,
     Category.DATA,
+    Category.MODEL,
 )
 
 _ALL = [
@@ -97,6 +105,8 @@ _ALL = [
     _f("epub", "EPUB", D, "epub", "application/epub+zip"),
     _f("rst", "RST", D, "rst", "text/x-rst"),
     _f("tex", "LaTeX", D, "tex latex", "text/x-tex application/x-tex"),
+    _f("url", "Link", D, "url webloc", "application/x-mswinurl"),
+    _f("vcf", "vCard", D, "vcf vcard", "text/vcard text/x-vcard"),
     # Spreadsheets
     _f("xlsx", "XLSX", S, "xlsx",
        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
@@ -114,15 +124,33 @@ _ALL = [
     _f("json", "JSON", J, "json", "application/json"),
     _f("yaml", "YAML", J, "yaml yml", "application/yaml application/x-yaml text/yaml"),
     _f("toml", "TOML", J, "toml", "application/toml"),
+    # 3D models
+    _f("obj", "OBJ", M, "obj", "model/obj"),
+    _f("glb", "GLB", M, "glb", "model/gltf-binary"),
+    _f("gltf", "glTF", M, "gltf", "model/gltf+json"),
+    _f("fbx", "FBX", M, "fbx"),
+    _f("stl", "STL", M, "stl", "model/stl"),
+    _f("ply", "PLY", M, "ply"),
+    # Derived targets: an image of a certain kind, named after the source ("wall_normal.png")
+    _f("normal-map", "Normal-Map", Category.TEXTURE, "png", suffix="_normal", detect=False),
+    _f("specular-map", "Specular-Map", Category.TEXTURE, "png", suffix="_specular",
+       detect=False),
+    _f("qr-png", "PNG", Category.QR, "png", suffix="_qr", detect=False),
+    _f("qr-svg", "SVG", Category.QR, "svg", suffix="_qr", detect=False),
+    # Sources without a file
+    _f("text", "Link/Text", Category.GENERATOR, "", detect=False),
+    _f("noise", "Noise-Map", Category.GENERATOR, "", detect=False),
 ]
 
 FORMATS: dict[str, Format] = {f.id: f for f in _ALL}
-_BY_EXTENSION: dict[str, Format] = {ext: f for f in _ALL for ext in f.extensions}
+_BY_EXTENSION: dict[str, Format] = {ext: f for f in _ALL if f.detect for ext in f.extensions}
+_ALIASES = {"qr": "qr-png", "normal": "normal-map", "specular": "specular-map"}
 
 
 def get_format(format_id: str) -> Format:
     """Return the format for an id or any known extension (case-insensitive)."""
     key = format_id.lower().lstrip(".")
+    key = _ALIASES.get(key, key)
     fmt = FORMATS.get(key) or _BY_EXTENSION.get(key)
     if fmt is None:
         raise KeyError(format_id)

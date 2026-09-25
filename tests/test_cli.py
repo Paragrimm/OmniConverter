@@ -86,3 +86,37 @@ def test_integrate_status(capsys, monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "share"))
     assert main(["--integrate", "status"]) == 0
     assert "not installed" in capsys.readouterr().out.lower()
+
+
+def test_qr_code_from_text(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert is_cli_invocation(["--text", "https://example.com"])
+    assert main(["--text", "https://example.com", "--to", "qr"]) == 0
+    assert (tmp_path / "qr-code.png").is_file()
+    assert main(["--text", "hi", "--to", "qr-svg", "-o", str(tmp_path / "hi.svg"), "-q"]) == 0
+    assert (tmp_path / "hi.svg").read_text().lstrip().startswith("<?xml")
+    assert "qr-code.png" in capsys.readouterr().err
+
+
+def test_generated_noise_is_named_after_its_seed(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    args = ["--generate", "noise", "--to", "png", "-s", "width=32", "-s", "height=32", "-q"]
+    assert main([*args, "-s", "seed=42"]) == 0
+    assert main([*args, "-s", "seed=42"]) == 0
+    assert (tmp_path / "noise-42.png").read_bytes() == (tmp_path / "noise-42 (1).png").read_bytes()
+    assert main(args) == 0  # a random seed, which then shows up in the name
+    random_one = [p.name for p in tmp_path.iterdir() if not p.name.startswith("noise-42")]
+    assert len(random_one) == 1 and random_one[0].startswith("noise-")
+
+
+def test_source_conflicts(csv_file):
+    with pytest.raises(SystemExit):
+        main([str(csv_file), "--text", "x", "--to", "qr"])
+    with pytest.raises(SystemExit):
+        main(["--text", "x", "--generate", "noise", "--to", "png"])
+
+
+def test_list_for_generators(capsys):
+    assert main(["--list", "--generate", "noise"]) == 0
+    out = capsys.readouterr().out
+    assert out.splitlines()[0] == "Noise-Map" and "jpg" in out

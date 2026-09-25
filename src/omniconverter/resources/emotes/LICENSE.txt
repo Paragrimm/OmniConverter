@@ -1,0 +1,15 @@
+Owlish Emotes
+=============
+
+gif_owly_cook_slow.gif and gif_owly_nerd.gif are unmodified files from the
+"Owlish Emotes Set 1.4" by Thomas Mayer (RoamingOwl):
+
+    https://roamingowl.itch.io/owlish-emotes
+    https://www.artstation.com/roamingowl
+
+Owlish Emotes Set 1.4 © 2025 by Thomas Mayer (RoamingOwl) is licensed under
+CC BY 4.0. To view a copy of this license, visit
+http://creativecommons.org/licenses/by/4.0/
+
+OmniConverter shows them while converting ("cook") and when a conversion is
+done ("nerd"), credited as "Emotes by RoamingOwl".

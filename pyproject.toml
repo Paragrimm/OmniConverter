@@ -5,13 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "omniconverter"
 dynamic = ["version"]
-description = "One simple, privacy-aware converter for video, audio, images, documents and data."
+description = "One simple, privacy-aware converter for video, audio, images, 3D models, documents and data."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Paragrimm" }]
-keywords = ["converter", "ffmpeg", "pandoc", "libreoffice", "gui", "privacy"]
+keywords = ["converter", "ffmpeg", "pandoc", "libreoffice", "gui", "privacy", "qr-code",
+            "normal-map", "noise", "3d"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: X11 Applications :: Qt",
@@ -20,6 +21,7 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
     "Topic :: Multimedia :: Graphics :: Graphics Conversion",
     "Topic :: Multimedia :: Sound/Audio :: Conversion",
     "Topic :: Multimedia :: Video :: Conversion",
@@ -32,6 +34,9 @@ dependencies = [
     "PyYAML>=6.0",
     "tomli-w>=1.0",
     "platformdirs>=4.0",
+    "numpy>=1.26",
+    "trimesh>=4.5",
+    "segno>=1.6",
 ]
 
 [project.optional-dependencies]
@@ -66,5 +71,6 @@ markers = [
     "ffmpeg: needs ffmpeg/ffprobe installed",
     "pandoc: needs pandoc installed",
     "libreoffice: needs LibreOffice (soffice) installed",
+    "blender: needs Blender installed",
     "gui: needs a Qt platform (offscreen is fine)",
 ]

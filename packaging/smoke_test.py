@@ -45,6 +45,15 @@ def convert(cmd: list[str], src: Path, target: str, *sets: str) -> Path:
     return out
 
 
+def produce(cmd: list[str], label: str, out: Path, *args: str) -> Path:
+    """Run the CLI with *args* and check that it wrote *out*."""
+    result = run(cmd, *args, "-q")
+    detail = (result.stderr or result.stdout).strip()[-800:]
+    check(label, result.returncode == 0 and out.is_file() and out.stat().st_size > 0,
+          "" if result.returncode == 0 else detail)
+    return out
+
+
 def stop(proc: subprocess.Popen) -> None:
     if sys.platform == "win32":
         subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
@@ -78,6 +87,7 @@ def main() -> int:
     # run a tool that is installed, the conversions below must fail.
     have_ffmpeg = bool(shutil.which("ffmpeg"))
     have_pandoc = bool(shutil.which("pandoc"))
+    have_blender = bool(shutil.which("blender"))
 
     with tempfile.TemporaryDirectory(prefix="omni-smoke-") as tmp:
         work = Path(tmp)
@@ -88,6 +98,24 @@ def main() -> int:
         png.write_bytes(_tiny_png())
         for target in ("jpg", "webp", "avif", "heic", "ico", "pdf"):
             convert(cmd, png, target)
+
+        # Generated images (numpy, segno) and texture maps
+        produce(cmd, "picture.png → picture_normal.png", work / "picture_normal.png",
+                str(png), "--to", "normal-map")
+        produce(cmd, "link → QR code", work / "qr.png",
+                "--text", "https://example.com", "--to", "qr", "-o", str(work / "qr.png"))
+        produce(cmd, "noise map", work / "noise.jpg", "--generate", "noise", "--to", "jpg",
+                "-s", "seed=1", "-s", "width=64", "-s", "height=64", "-o", str(work / "noise.jpg"))
+
+        # 3D models (trimesh and its bundled resources)
+        obj = work / "triangle.obj"
+        obj.write_text("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", encoding="utf-8")
+        glb = convert(cmd, obj, "glb")
+        convert(cmd, glb, "stl")
+        if have_blender:
+            convert(cmd, glb, "fbx")
+        else:
+            print("- Blender not installed, skipping FBX")
 
         # Data (pure Python, openpyxl, PyYAML)
         csv = work / "table.csv"
@@ -104,6 +132,10 @@ def main() -> int:
                             "sine=duration=2", str(wav)], check=True)
             convert(cmd, wav, "mp3", "normalize=podcast")
             convert(cmd, wav, "opus")
+            gif = work / "anim.gif"
+            subprocess.run([ffmpeg, "-loglevel", "error", "-f", "lavfi", "-i",
+                            "testsrc=duration=1:size=64x48:rate=10", str(gif)], check=True)
+            convert(cmd, gif, "webm")
         else:
             print("- FFmpeg not installed, skipping audio")
         if have_pandoc:

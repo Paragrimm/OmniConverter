@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from omniconverter.core.backend import Backend, Conversion
-from omniconverter.core.converter import Converter, default_output_path, unique_path
+from omniconverter.core.converter import Converter, SourceFile, default_output_path, unique_path
 from omniconverter.core.errors import Cancelled, ConversionError
 from omniconverter.core.formats import get_format
 from omniconverter.core.options import Kind, Option
@@ -118,3 +118,72 @@ def test_default_output_path_never_overwrites(tmp_path):
 
 def test_unique_path_keeps_free_names(tmp_path):
     assert unique_path(tmp_path / "free.txt") == tmp_path / "free.txt"
+
+
+def test_derived_targets_get_a_suffix(tmp_path):
+    src = tmp_path / "wall.jpg"
+    src.write_text("x")
+    assert default_output_path(src, get_format("normal-map")) == tmp_path / "wall_normal.png"
+    assert default_output_path(src, get_format("qr-svg")) == tmp_path / "wall_qr.svg"
+
+
+class Generator(Backend):
+    id = "generator"
+
+    def conversions(self):
+        yield Conversion("noise", "png")
+
+    def options(self, source, target, media=None):
+        return [Option("seed", "Seed", Kind.INT, 7, minimum=0, maximum=99)]
+
+    def output_stem(self, request):
+        return f"made-{request.options['seed']}"
+
+    def convert(self, request, output: Path, ctx):
+        assert request.source is None
+        output.write_text(str(request.options["seed"]))
+
+
+def test_sources_without_a_file(tmp_path, monkeypatch):
+    conv = Converter(ToolLocator(), [Generator()])
+    source = SourceFile.generator("noise")
+    assert source.name == "Noise-Map" and source.size == 0
+    png = get_format("png")
+    assert conv.output_path(source, png, {"seed": 3}, tmp_path) == tmp_path / "made-3.png"
+    assert conv.output_path(source, png, {"seed": "bad"}, tmp_path) == tmp_path / "made-7.png"
+    monkeypatch.chdir(tmp_path)
+    assert conv.output_path(source, png) == tmp_path / "made-7.png"  # CLI: current folder
+    out = conv.convert(source, png, tmp_path / "made-3.png", {"seed": 3})
+    assert out.read_text() == "3"
+    with pytest.raises(ValueError):
+        SourceFile.generator("png")
+    assert SourceFile.from_text("äb").size == 3
+
+
+class WithCompanions(Scripted):
+    def convert(self, request, output: Path, ctx):
+        output.write_text("main")
+        ctx.companions[f"{ctx.final_path.stem}.side"] = b"side"
+        if self.behaviour == "bad-name":
+            ctx.companions["../escape.txt"] = b"x"
+
+
+def test_companion_files(tmp_path):
+    conv = Converter(ToolLocator(), [WithCompanions("ok")])
+    src = tmp_path / "in.txt"
+    src.write_text("x")
+    source = conv.inspect(src)
+    out = conv.convert(source, get_format("md"), tmp_path / "out.md")
+    assert out.read_text() == "main" and (tmp_path / "out.side").read_bytes() == b"side"
+
+    (tmp_path / "again.side").write_text("keep me")  # never overwritten …
+    with pytest.raises(ConversionError):
+        conv.convert(source, get_format("md"), tmp_path / "again.md")
+    assert (tmp_path / "again.side").read_text() == "keep me"
+    assert not (tmp_path / "again.md").exists()  # … and then nothing is saved at all
+
+    bad = Converter(ToolLocator(), [WithCompanions("bad-name")])
+    with pytest.raises(ConversionError):
+        bad.convert(source, get_format("md"), tmp_path / "bad.md")
+    assert not (tmp_path.parent / "escape.txt").exists()
+    assert leftovers(tmp_path) == []

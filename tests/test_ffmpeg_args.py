@@ -206,3 +206,31 @@ def test_parse_probe_ignores_cover_art():
     assert video.has_video and not video.has_audio
     assert video.fps == pytest.approx(29.97, abs=0.01)
     assert video.duration == 3.0
+
+
+def test_gif_to_webm_keeps_transparency():
+    gif = MediaInfo(duration=1.0, has_video=True, width=385, height=385)
+    opts = {"keep_transparency": True, "quality": "medium", "resolution": "original"}
+    args = fa.build_video("ffmpeg", "in.gif", "out.webm", "webm", opts, gif, encoders=ENCODERS)
+    assert after(args, "-c:v") == "libvpx-vp9"
+    assert after(args, "-pix_fmt") == "yuva420p" and after(args, "-auto-alt-ref") == "0"
+    assert "-an" in args
+    opaque = fa.build_video("ffmpeg", "in.gif", "out.webm", "webm",
+                            {**opts, "keep_transparency": False}, gif, encoders=ENCODERS)
+    assert after(opaque, "-pix_fmt") == "yuv420p" and "-auto-alt-ref" not in opaque
+    mp4 = fa.build_video("ffmpeg", "in.gif", "out.mp4", "mp4", opts, gif, encoders=ENCODERS)
+    assert after(mp4, "-pix_fmt") == "yuv420p"  # H.264 has no alpha channel
+
+
+def test_gif_sources_get_gif_options():
+    from omniconverter.backends.ffmpeg import FFmpegVideoBackend
+    from omniconverter.core.formats import get_format
+
+    backend = FFmpegVideoBackend()
+    webm = {o.key for o in backend.options(get_format("gif"), get_format("webm"))}
+    assert "keep_transparency" in webm
+    assert not webm & {"normalize", "remove_audio", "fast"}  # GIFs have no sound to process
+    mp4 = {o.key for o in backend.options(get_format("gif"), get_format("mp4"))}
+    assert "keep_transparency" not in mp4
+    video = {o.key for o in backend.options(get_format("mp4"), get_format("webm"))}
+    assert "keep_transparency" not in video and "normalize" in video
