@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import html
 import time
 from pathlib import Path
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QPlainTextEdit,
     QProgressBar,
@@ -28,19 +30,23 @@ from PySide6.QtWidgets import (
 
 from omniconverter import APP_NAME
 from omniconverter.config import Settings
-from omniconverter.core.converter import Converter, SourceFile, default_output_path
+from omniconverter.core.converter import Converter, SourceFile
 from omniconverter.core.errors import ConversionError
-from omniconverter.core.formats import CATEGORY_ORDER, Format
+from omniconverter.core.formats import CATEGORY_ORDER, Category, Format
 from omniconverter.core.registry import TargetChoice
 from omniconverter.core.tools import TOOLS, install_hint
 from omniconverter.gui.options_form import OptionsForm
 from omniconverter.gui.settings_dialog import SettingsDialog
 from omniconverter.gui.widgets import (
     DropArea,
+    EmoteLabel,
     FlowLayout,
     app_icon,
+    dropped_text,
+    emote_credit,
     format_duration,
     format_size,
+    generated_output_dir,
     hline,
     local_paths,
     open_file,
@@ -58,6 +64,11 @@ def file_filter() -> str:
     return f"{t('gui.drop.supported')} ({patterns});;{t('gui.drop.all_files')} (*)"
 
 
+def default_dir(source: SourceFile) -> Path | None:
+    """Where results without a source file go by default (files: next to the original)."""
+    return generated_output_dir() if source.path is None else None
+
+
 # --------------------------------------------------------------------------------------------
 
 
@@ -68,7 +79,28 @@ class DropPage(QWidget):
         layout.setContentsMargins(24, 24, 24, 16)
         self.drop = DropArea(file_filter())
         self.drop.files_chosen.connect(window.open_files)
+        self.drop.text_dropped.connect(window.open_text)
         layout.addWidget(self.drop, 1)
+
+        create = QHBoxLayout()
+        create.setSpacing(6)
+        self.qr_text = QLineEdit()
+        self.qr_text.setPlaceholderText(t("gui.qr_placeholder"))
+        self.qr_text.setClearButtonEnabled(True)
+        self.qr_button = QPushButton(t("gui.qr_button"))
+        self.qr_button.setEnabled(False)
+        self.qr_text.textChanged.connect(
+            lambda text: self.qr_button.setEnabled(bool(text.strip())))
+        self.qr_text.returnPressed.connect(self._make_qr)
+        self.qr_button.clicked.connect(self._make_qr)
+        self.noise_button = QPushButton(t("gui.noise_button"))
+        self.noise_button.clicked.connect(lambda: window.open_generator("noise"))
+        create.addWidget(self.qr_text, 1)
+        create.addWidget(self.qr_button)
+        create.addSpacing(12)
+        create.addWidget(self.noise_button)
+        layout.addLayout(create)
+        self._window = window
 
         self.error = QLabel()
         self.error.setObjectName("Error")
@@ -92,6 +124,10 @@ class DropPage(QWidget):
     def show_error(self, message: str) -> None:
         self.error.setText(message)
         self.error.setVisible(bool(message))
+
+    def _make_qr(self) -> None:
+        if self.qr_text.text().strip():
+            self._window.open_text(self.qr_text.text())
 
 
 class ConfigPage(QWidget):
@@ -122,6 +158,12 @@ class ConfigPage(QWidget):
         self.subtitle = QLabel()
         self.subtitle.setObjectName("Muted")
         titles.addWidget(self.title)
+        self.text_edit = QPlainTextEdit()  # content of a QR code typed or dropped in
+        self.text_edit.setObjectName("QRText")
+        self.text_edit.setMaximumHeight(84)
+        self.text_edit.textChanged.connect(self._text_changed)
+        self.text_edit.hide()
+        titles.addWidget(self.text_edit)
         titles.addWidget(self.subtitle)
         header.addLayout(titles, 1)
         outer.addLayout(header)
@@ -206,7 +248,22 @@ class ConfigPage(QWidget):
         self._update_output()
 
     def _fill_header(self) -> None:
-        if len(self.sources) == 1:
+        is_text = len(self.sources) == 1 and self.sources[0].format.id == "text"
+        self.text_edit.setVisible(is_text)
+        self.title.setToolTip("")
+        if len(self.sources) == 1 and self.sources[0].path is None:
+            s = self.sources[0]
+            if is_text:
+                self.title.setText(t("gui.qr_content"))
+                if self.text_edit.toPlainText() != s.text:
+                    self.text_edit.blockSignals(True)
+                    self.text_edit.setPlainText(s.text or "")
+                    self.text_edit.blockSignals(False)
+                self.subtitle.setText(t("gui.qr_bytes", n=s.size))
+            else:
+                self.title.setText(s.format.label)
+                self.subtitle.setText(t("gui.generated"))
+        elif len(self.sources) == 1:
             s = self.sources[0]
             self.title.setText(s.path.name)
             parts = [s.format.label, format_size(s.size)]
@@ -221,6 +278,14 @@ class ConfigPage(QWidget):
             total = sum(s.size for s in self.sources)
             self.subtitle.setText(f"{kinds} · {format_size(total)}")
             self.title.setToolTip("\n".join(str(s.path) for s in self.sources))
+
+    def _text_changed(self) -> None:
+        if len(self.sources) == 1 and self.sources[0].format.id == "text":
+            self.sources[0] = dataclasses.replace(self.sources[0],
+                                                  text=self.text_edit.toPlainText())
+            self.subtitle.setText(t("gui.qr_bytes", n=self.sources[0].size))
+            self._update_convert_button()
+            self._update_output()
 
     def _fill_targets(self, choices: list[TargetChoice]) -> None:
         for button in self.group.buttons():
@@ -290,12 +355,18 @@ class ConfigPage(QWidget):
         self.options_title.setVisible(has_options)
         if form is not None:
             form.changed.connect(self._update_convert_button)
+            form.changed.connect(self._update_output)  # e.g. the seed is part of the name
             self.options_holder.addWidget(form)
         self._update_convert_button()
 
     def _update_convert_button(self) -> None:
         ok = self.target is not None and (self.form is None or self.form.is_valid())
+        if ok and self.sources and self.sources[0].format.id == "text":
+            ok = bool((self.sources[0].text or "").strip())
         self.convert_button.setEnabled(ok)
+
+    def _values(self) -> dict:
+        return self.form.conversion_values() if self.form and self.form.is_valid() else {}
 
     # -- output location --------------------------------------------------------------------
 
@@ -304,9 +375,16 @@ class ConfigPage(QWidget):
             if self.custom_output:
                 return str(self.custom_output)
             return t("gui.next_to_originals")
+        source = self.sources[0]
         if self.target is None:
-            return str(self.sources[0].path.parent)
-        return str(self.custom_output or default_output_path(self.sources[0].path, self.target))
+            return str(default_dir(source) or source.path.parent)
+        return str(self.custom_output or self._default_output())
+
+    def _default_output(self) -> Path:
+        assert self.target is not None
+        source = self.sources[0]
+        return self.window_.converter.output_path(source, self.target, self._values(),
+                                                  default_dir(source))
 
     def _update_output(self) -> None:
         text = self.output_for_display()
@@ -322,7 +400,7 @@ class ConfigPage(QWidget):
 
     def _choose_output(self) -> None:
         if len(self.sources) == 1 and self.target is not None:
-            start = self.custom_output or default_output_path(self.sources[0].path, self.target)
+            start = self.custom_output or self._default_output()
             ext = self.target.extension
             path, _ = QFileDialog.getSaveFileName(
                 self, t("gui.save_as"), str(start), f"{self.target.label} (*.{ext})"
@@ -343,7 +421,9 @@ class ConfigPage(QWidget):
         assert self.target is not None
         values = self.form.conversion_values() if self.form else {}
         if len(self.sources) == 1:
-            return [Job(self.sources[0], self.target, values, output=self.custom_output)]
+            source = self.sources[0]
+            return [Job(source, self.target, values, output=self.custom_output,
+                        output_dir=default_dir(source))]
         return [Job(s, self.target, values, output_dir=self.custom_output) for s in self.sources]
 
 
@@ -353,6 +433,10 @@ class ProgressPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
         layout.addStretch(1)
+        self.emote = EmoteLabel("gif_owly_cook_slow")
+        self.credit = emote_credit()
+        layout.addWidget(self.emote, 0, Qt.AlignmentFlag.AlignCenter)
+        layout.addSpacing(8)
         self.title = QLabel(t("gui.converting"))
         self.title.setObjectName("PageTitle")
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -370,6 +454,9 @@ class ProgressPage(QWidget):
         layout.addSpacing(12)
         layout.addWidget(self.cancel, 0, Qt.AlignmentFlag.AlignCenter)
         layout.addStretch(1)
+        layout.addWidget(self.credit)
+        self.emote.setVisible(self.emote.is_valid())
+        self.credit.setVisible(self.emote.is_valid())
 
     def set_job(self, text: str) -> None:
         self.detail.setText(text)
@@ -396,6 +483,8 @@ class ResultPage(QWidget):
         self.icon = QLabel()
         self.icon.setObjectName("ResultIcon")
         self.icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.emote = EmoteLabel("gif_owly_nerd")
+        self.credit = emote_credit()
         self.title = QLabel()
         self.title.setObjectName("PageTitle")
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -411,6 +500,7 @@ class ResultPage(QWidget):
         self.details.setObjectName("Details")
         self.details.hide()
         self.details_toggle.toggled.connect(self.details.setVisible)
+        layout.addWidget(self.emote, 0, Qt.AlignmentFlag.AlignCenter)
         for w in (self.icon, self.title, self.message):
             layout.addWidget(w)
         layout.addWidget(self.details_toggle, 0, Qt.AlignmentFlag.AlignCenter)
@@ -432,9 +522,15 @@ class ResultPage(QWidget):
             buttons.addWidget(b)
         buttons.addStretch(1)
         layout.addLayout(buttons)
+        layout.addWidget(self.credit)
 
-    def show_result(self, outputs: list[Path], errors: list[tuple[str, str, str]]) -> None:
+    def show_result(self, outputs: list[Path], errors: list[tuple[str, str, str]],
+                    generated: bool = False) -> None:
         self.outputs = outputs
+        owl = not errors and self.emote.is_valid()
+        self.emote.setVisible(owl)
+        self.credit.setVisible(owl)
+        self.icon.setVisible(not owl)
         details = "\n\n".join(f"{name}: {msg}\n{det}".strip() for name, msg, det in errors)
         rich = not errors and len(outputs) == 1
         self.message.setTextFormat(Qt.TextFormat.RichText if rich else Qt.TextFormat.PlainText)
@@ -464,7 +560,8 @@ class ResultPage(QWidget):
         self.details_toggle.setVisible(bool(details.strip()))
         self.open_button.setVisible(len(outputs) == 1)
         self.folder_button.setVisible(bool(outputs))
-        self.again_button.setVisible(bool(errors))
+        # Generated results: quickly try another seed or text.
+        self.again_button.setVisible(bool(errors) or generated)
 
 
 # --------------------------------------------------------------------------------------------
@@ -497,6 +594,7 @@ class MainWindow(QMainWindow):
 
         QShortcut(QKeySequence.StandardKey.Open, self, activated=self.drop_page.drop.choose_files)
         QShortcut(QKeySequence(Qt.Key.Key_Escape), self, activated=self._escape)
+        QShortcut(QKeySequence.StandardKey.Paste, self, activated=self._paste)
 
     # -- navigation -------------------------------------------------------------------------
 
@@ -541,7 +639,8 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(t("gui.busy"), 4000)
             return
         merge = (self.stack.currentWidget() is self.config_page
-                 and time.monotonic() - self._last_open < MERGE_WINDOW_S)
+                 and time.monotonic() - self._last_open < MERGE_WINDOW_S
+                 and all(s.path is not None for s in self.config_page.sources))
         self._last_open = time.monotonic()
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -575,16 +674,51 @@ class MainWindow(QMainWindow):
         self.config_page.load(sources, choices, note, keep_target=merge)
         self.stack.setCurrentWidget(self.config_page)
 
+    def open_text(self, text: str) -> None:
+        """A link or text to turn into a QR code."""
+        if text.strip():
+            self._open_without_file(SourceFile.from_text(text.strip()))
+
+    def open_generator(self, format_id: str) -> None:
+        self._open_without_file(SourceFile.generator(format_id))
+
+    def _open_without_file(self, source: SourceFile) -> None:
+        self.raise_()
+        self.activateWindow()
+        if self.busy():
+            self.statusBar().showMessage(t("gui.busy"), 4000)
+            return
+        self._last_open = 0.0  # files dropped next are not merged into this
+        self.config_page.note.setToolTip("")
+        self.config_page.load([source], self.converter.targets([source]))
+        self.stack.setCurrentWidget(self.config_page)
+
+    def _paste(self) -> None:
+        if self.stack.currentWidget() is not self.drop_page or self.busy():
+            return
+        mime = QApplication.clipboard().mimeData()
+        paths = local_paths(mime)
+        if paths:
+            self._last_open = 0.0
+            self.open_files(paths)
+        else:
+            self.open_text(dropped_text(mime))
+
     def dragEnterEvent(self, event) -> None:
-        if event.mimeData().hasUrls() and not self.busy():
+        mime = event.mimeData()
+        if (mime.hasUrls() or mime.hasText()) and not self.busy():
             event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:
         paths = local_paths(event.mimeData())
+        text = "" if paths else dropped_text(event.mimeData())
         if paths:
             event.acceptProposedAction()
             self._last_open = 0.0  # an explicit drop replaces the current selection
             self.open_files(paths)
+        elif text:
+            event.acceptProposedAction()
+            self.open_text(text)
 
     # -- converting -------------------------------------------------------------------------
 
@@ -598,9 +732,9 @@ class MainWindow(QMainWindow):
         worker.progress.connect(lambda _i, f: self.progress_page.set_progress(f))
         worker.job_finished.connect(lambda _i, path: self._outputs.append(Path(path)))
         worker.job_failed.connect(
-            lambda i, msg, det: self._errors.append((jobs[i].source.path.name, msg, det))
+            lambda i, msg, det: self._errors.append((jobs[i].source.name, msg, det))
         )
-        worker.finished.connect(self._on_worker_finished)
+        worker.finished.connect(lambda: self._on_worker_finished(jobs))
         self.worker = worker
         self.progress_page.cancel.setEnabled(True)
         self.stack.setCurrentWidget(self.progress_page)
@@ -608,7 +742,10 @@ class MainWindow(QMainWindow):
 
     def _on_job_started(self, jobs: list[Job], index: int) -> None:
         job = jobs[index]
-        text = f"{job.source.path.name} → {job.target.label}"
+        target = job.target.label
+        if job.target.category is Category.QR:  # "PNG" alone would be misleading
+            target = f"{t('category.qr')} {target}"
+        text = f"{job.source.name} → {target}"
         if len(jobs) > 1:
             text = f"{text}  ({index + 1}/{len(jobs)})"
         self.progress_page.set_job(text)
@@ -619,14 +756,15 @@ class MainWindow(QMainWindow):
             self.progress_page.detail.setText(t("gui.cancelling"))
             self.worker.cancel()
 
-    def _on_worker_finished(self) -> None:
+    def _on_worker_finished(self, jobs: list[Job]) -> None:
         worker, self.worker = self.worker, None
         if worker is not None and worker.cancelled and not self._outputs:
             self.config_page.note.setText(t("gui.cancelled"))
             self.stack.setCurrentWidget(self.config_page)
             self.config_page._update_output()
             return
-        self.result_page.show_result(self._outputs, self._errors)
+        generated = any(job.source.path is None for job in jobs)
+        self.result_page.show_result(self._outputs, self._errors, generated)
         self.stack.setCurrentWidget(self.result_page)
         # Default output names may have been taken now – refresh for a second run.
         QTimer.singleShot(0, self.config_page._update_output)

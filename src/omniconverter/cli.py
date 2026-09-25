@@ -9,15 +9,16 @@ from pathlib import Path
 
 from omniconverter import __version__
 from omniconverter.config import Settings
-from omniconverter.core.converter import Converter, SourceFile, default_output_path
+from omniconverter.core.converter import Converter, SourceFile
 from omniconverter.core.errors import ConversionError
-from omniconverter.core.formats import get_format
+from omniconverter.core.formats import FORMATS, Category, get_format
 from omniconverter.core.options import Kind, format_time
 from omniconverter.core.tools import TOOLS, ToolLocator, install_hint
 from omniconverter.i18n import t
 
 _CLI_FLAGS = {"--to", "-t", "--list", "--options", "--tools", "--integrate", "--help", "-h",
-              "--version"}
+              "--version", "--text", "--generate"}
+GENERATORS = [f.id for f in FORMATS.values() if f.category is Category.GENERATOR and f.id != "text"]
 
 
 def is_cli_invocation(argv: Sequence[str]) -> bool:
@@ -32,6 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("files", nargs="*", type=Path, metavar="FILE")
+    p.add_argument("--text", metavar="TEXT", help=t("cli.help.text"))
+    p.add_argument("--generate", choices=GENERATORS, help=t("cli.help.generate"))
     p.add_argument("-t", "--to", metavar="FORMAT", help=t("cli.help.to"))
     p.add_argument("-o", "--output", type=Path, metavar="PATH", help=t("cli.help.output"))
     p.add_argument("-s", "--set", action="append", default=[], metavar="KEY=VALUE",
@@ -62,9 +65,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             return cmd_tools(converter.locator)
         if args.integrate:
             return cmd_integrate(args.integrate)
-        if not args.files:
+        without_file = [x for x in (args.text, args.generate) if x is not None]
+        if len(without_file) > 1 or (without_file and args.files):
+            parser.error(t("cli.error.source_conflict"))
+        if args.text is not None:
+            sources = [SourceFile.from_text(args.text)]
+        elif args.generate:
+            sources = [SourceFile.generator(args.generate)]
+        elif not args.files:
             parser.error(t("cli.error.no_files"))
-        sources = [converter.inspect(f) for f in args.files]
+        else:
+            sources = [converter.inspect(f) for f in args.files]
         if args.list:
             return cmd_list(converter, sources)
         if not args.to:
@@ -104,28 +115,31 @@ def cmd_convert(converter: Converter, sources: list[SourceFile], target, args) -
         raise ConversionError(t("cli.error.output_dir"))
     failures = 0
     for index, source in enumerate(sources, 1):
+        values: dict = raw
+        if source.path is None:  # fix random defaults (the seed), it is part of the name
+            values = converter.resolve_options(source, target, raw)
         if output is None:
-            out = default_output_path(source.path, target)
+            out = converter.output_path(source, target, values)
         elif many or output.is_dir():
-            out = default_output_path(source.path, target, output)
+            out = converter.output_path(source, target, values, output)
         else:
             out = output
             if out.exists() and not args.overwrite:
                 raise ConversionError(t("cli.error.exists", path=str(out)))
         label = f"[{index}/{len(sources)}] " if many else ""
         show_progress = not args.quiet and sys.stderr.isatty()
-        progress = _progress_printer(f"{label}{source.path.name}") if show_progress else None
+        progress = _progress_printer(f"{label}{source.name}") if show_progress else None
         try:
-            result = converter.convert(source, target, out, raw, on_progress=progress,
+            result = converter.convert(source, target, out, values, on_progress=progress,
                                        lenient=many)
         except ConversionError as exc:
             if not many:
                 raise
             failures += 1
-            print(f"\r{label}{source.path.name}: {exc.message}", file=sys.stderr)
+            print(f"\r{label}{source.name}: {exc.message}", file=sys.stderr)
             continue
         if not args.quiet:
-            print(f"\r{label}{source.path.name} → {result}", file=sys.stderr)
+            print(f"\r{label}{source.name} → {result}", file=sys.stderr)
     return 1 if failures else 0
 
 
@@ -145,7 +159,10 @@ def cmd_list(converter: Converter, sources: list[SourceFile]) -> int:
             info = f" · {format_time(media.duration)}"
             if media.width:
                 info += f" · {media.width}×{media.height}"
-        print(f"{source.path.name} ({source.format.label}{info})")
+        if source.path is None:
+            print(source.name)
+        else:
+            print(f"{source.name} ({source.format.label}{info})")
         for choice in converter.targets([source]):
             if choice.available:
                 print(f"  {choice.format.id:<6} {choice.format.label}")

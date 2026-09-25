@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
@@ -11,6 +12,7 @@ from PySide6.QtWidgets import (
     QColorDialog,
     QComboBox,
     QFormLayout,
+    QHBoxLayout,
     QLineEdit,
     QPushButton,
     QSpinBox,
@@ -56,6 +58,7 @@ class OptionsForm(QWidget):
         super().__init__(parent)
         self._options = options
         self._widgets: dict[str, QWidget] = {}
+        self._fields: dict[str, QWidget] = {}  # what sits in the form row (widget or a box)
         self._rows: dict[str, tuple[QFormLayout, int]] = {}
         self._media = media
 
@@ -89,7 +92,7 @@ class OptionsForm(QWidget):
 
     def _align_labels(self) -> None:
         """Give both forms the same label column so the fields line up."""
-        labels = [form.labelForField(self._widgets[key]) for key, (form, _row) in
+        labels = [form.labelForField(self._fields[key]) for key, (form, _row) in
                   self._rows.items()]
         labels = [label for label in labels if label is not None]
         if labels:
@@ -156,10 +159,23 @@ class OptionsForm(QWidget):
             widget.setToolTip(opt.help)
         widget.setObjectName(f"opt_{opt.key}")
         self._widgets[opt.key] = widget
+        field = widget
+        if opt.kind is Kind.INT and opt.randomize:
+            field = QWidget()
+            row = QHBoxLayout(field)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.addWidget(widget)
+            dice = QToolButton()
+            dice.setObjectName(f"random_{opt.key}")
+            dice.setText("🎲")
+            dice.setToolTip(t("gui.randomize"))
+            dice.clicked.connect(lambda _=False, o=opt, w=widget: w.setValue(_random_value(o)))
+            row.addWidget(dice)
+        self._fields[opt.key] = field
         if opt.kind is Kind.BOOL:
-            form.addRow(widget)
+            form.addRow(field)
         else:
-            form.addRow(opt.label, widget)
+            form.addRow(opt.label, field)
         self._rows[opt.key] = (form, form.rowCount() - 1)
 
     def _on_change(self, *_args: Any) -> None:
@@ -218,6 +234,12 @@ class OptionsForm(QWidget):
 
     def widget(self, key: str) -> QWidget:
         return self._widgets[key]
+
+
+def _random_value(opt: Option) -> int:
+    low = opt.minimum if opt.minimum is not None else 0
+    high = min(opt.maximum if opt.maximum is not None else 999_999, low + 999_999)
+    return low + secrets.randbelow(high - low + 1)
 
 
 class _Invalid:
