@@ -15,6 +15,7 @@ from pathlib import Path
 
 from omniconverter import APP_ID, APP_NAME
 from omniconverter.i18n import MESSAGES
+from omniconverter.runtime import child_env
 
 _LABEL_DE, _LABEL_EN = MESSAGES["integration.menu_label"]
 _COMMENT_DE, _COMMENT_EN = MESSAGES["integration.comment"]
@@ -164,5 +165,5 @@ def is_installed() -> bool:
 def _refresh(applications: Path) -> None:
     tool = shutil.which("update-desktop-database")
     if tool and applications.is_dir():
-        subprocess.run([tool, "-q", str(applications)], check=False,
+        subprocess.run([tool, "-q", str(applications)], check=False, env=child_env(),
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

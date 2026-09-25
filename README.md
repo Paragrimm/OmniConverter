@@ -52,10 +52,30 @@ passen.
 
 ## Installation
 
-Du brauchst **Python 3.11+**. Bilder und Daten funktionieren sofort. Für Video/Audio,
-Dokumente und Office-Formate nutzt OmniConverter bereits installierte Programme und findet
-sie automatisch. Fehlt eines, sind die passenden Formate ausgegraut, und ein Hinweis zeigt,
-wie man es installiert.
+### Fertige Pakete (empfohlen)
+
+Unter [**Releases**](https://github.com/Paragrimm/OmniConverter/releases) gibt es fertige
+Pakete, ohne Python und ohne Klonen des Repos:
+
+| System | Datei | So geht's |
+|---|---|---|
+| **Windows** | `…-windows-x64-setup.exe` | Installer ohne Admin-Rechte; richtet auf Wunsch das Kontextmenü ein, die Deinstallation entfernt es wieder |
+| Windows portabel | `…-windows-x64-portable.zip` | entpacken, `OmniConverter.exe` starten; Einstellungen bleiben im Ordner (USB-Stick) |
+| **Linux** | `…-x86_64.AppImage` | `chmod +x` und starten; Kontextmenü mit `./OmniConverter-*.AppImage --integrate install` |
+| Debian/Ubuntu | `omniconverter_…_amd64.deb` | `sudo apt install ./omniconverter_*_amd64.deb` (holt FFmpeg, Pandoc und LibreOffice als Empfehlung mit) |
+| Linux portabel | `…-linux-x86_64-portable.tar.gz` | entpacken, `OmniConverter/OmniConverter` starten |
+
+Die Windows-Dateien sind noch nicht signiert. Die SmartScreen-Warnung lässt sich mit
+„Weitere Informationen“ → „Trotzdem ausführen“ überspringen. Die Linux-Pakete laufen ab
+glibc 2.35 (Ubuntu 22.04, Debian 12, Fedora 36 und neuer). In allen Paketen stecken beide
+Programme: `OmniConverter` (Oberfläche) und `omniconvert` (Kommandozeile). Unter Linux
+versteht auch das AppImage die CLI-Optionen, z. B. `./OmniConverter-*.AppImage --to mp4 clip.mov`.
+
+### Externe Programme
+
+Bilder und Daten funktionieren sofort. Für Video/Audio, Dokumente und Office-Formate nutzt
+OmniConverter bereits installierte Programme und findet sie automatisch. Fehlt eines, sind
+die passenden Formate ausgegraut, und ein Hinweis zeigt, wie man es installiert.
 
 | Programm | wofür | Windows | Linux (Debian/Ubuntu) |
 |---|---|---|---|
@@ -63,20 +83,18 @@ wie man es installiert.
 | Pandoc | Markdown, HTML, EPUB, … | `winget install JohnMacFarlane.Pandoc` | `sudo apt install pandoc` |
 | LibreOffice | Office-Formate, PDF | `winget install TheDocumentFoundation.LibreOffice` | `sudo apt install libreoffice` |
 
+Eigene Programmpfade lassen sich in den Einstellungen (⚙) oder per Umgebungsvariable setzen
+(`OMNICONVERTER_FFMPEG`, `OMNICONVERTER_PANDOC`, `OMNICONVERTER_SOFFICE`, …).
+
+### Aus dem Quellcode (Python 3.11+)
+
 ```bash
 pipx install git+https://github.com/Paragrimm/OmniConverter
 # oder aus einem Checkout:
 pip install .
 ```
 
-Danach gibt es zwei Befehle: `omniconverter` startet die Oberfläche, `omniconvert` ist die
-Kommandozeile. Eigene Programmpfade lassen sich in den Einstellungen (⚙) oder per
-Umgebungsvariable setzen (`OMNICONVERTER_FFMPEG`, `OMNICONVERTER_PANDOC`,
-`OMNICONVERTER_SOFFICE`, …).
-
-Ein portables Paket (Ordner mit `OmniConverter.exe` und `omniconvert.exe`) baut
-`python packaging/build.py` (braucht `pip install .[build]`). Die CI legt es für Windows und
-Linux als Artefakt ab.
+Danach gibt es die Befehle `omniconverter` (Oberfläche) und `omniconvert` (Kommandozeile).
 
 ## Benutzung
 
@@ -149,6 +167,24 @@ src/omniconverter/
   i18n.py        Deutsch/Englisch
 ```
 
+**Pakete bauen:** `pip install -e ".[build]"`, dann `python packaging/build.py`. Unter
+Windows entstehen die portable ZIP und der Installer (braucht [Inno Setup](https://jrsoftware.org/isinfo.php)),
+unter Linux tar.gz, AppImage und `.deb`, alles in `dist/release/`. `python
+packaging/smoke_test.py <programm>` prüft ein gebautes Paket mit echten Umwandlungen. Die
+CI baut und prüft alle Pakete bei jedem Pull Request, inklusive stiller Installation und
+Deinstallation unter Windows.
+
+**Release veröffentlichen:** Version in `src/omniconverter/__init__.py` erhöhen, mergen, dann
+taggen:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+Die CI baut dann alle Pakete, prüft sie und legt ein GitHub-Release mit allen Dateien und
+`SHA256SUMS.txt` an. Tags mit Bindestrich (z. B. `v0.2.0-beta.1`) werden als Vorabversion
+markiert. Passt der Tag nicht zur Version im Code, bricht der Release ab.
+
 **Neues Format oder Werkzeug:** Eine `Backend`-Klasse schreiben (`conversions()`,
 `options()`, `convert()`) und in `backends/__init__.py` eintragen. GUI und CLI übernehmen
 Zielformate und Optionen automatisch aus dem Schema. Bieten mehrere Backends dieselbe
@@ -157,8 +193,8 @@ Umwandlung an, gewinnt das mit der höchsten Priorität, dessen Programme instal
 ## Ideen für später
 
 Videovorschau mit Schnitt-Regler, Hardware-Encoding, PDF → Bilder/Text, SVG, Untertitel,
-Presets, optional mitgeliefertes FFmpeg, Installer (MSI/Inno Setup, AppImage/Flatpak),
-modernes Windows-11-Kontextmenü, macOS.
+Presets, optional mitgeliefertes FFmpeg, signierte Windows-Pakete, Flatpak, modernes
+Windows-11-Kontextmenü, macOS.
 
 ## Lizenz
 

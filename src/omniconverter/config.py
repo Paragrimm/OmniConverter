@@ -7,13 +7,15 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from omniconverter import APP_NAME
+from omniconverter import APP_NAME, runtime
 
 
 def config_dir() -> Path:
     override = os.environ.get("OMNICONVERTER_CONFIG_DIR")
     if override:
         return Path(override)
+    if runtime.is_portable():
+        return runtime.app_dir() / "settings"
     from platformdirs import user_config_path
 
     return user_config_path(APP_NAME, appauthor=False)

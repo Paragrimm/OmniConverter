@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from omniconverter.i18n import current_language, t
 from omniconverter.integration import RESOURCES
+from omniconverter.runtime import child_env
 
 
 def app_icon() -> QIcon:
@@ -70,6 +71,7 @@ def show_in_folder(path: Path) -> None:
                  "--method", "org.freedesktop.FileManager1.ShowItems",
                  f"['{path.as_uri()}']", ""],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False,
+                env=child_env(),
             )
             if result.returncode == 0:
                 return

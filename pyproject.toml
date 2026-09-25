@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "omniconverter"
-version = "0.1.0"
+dynamic = ["version"]
 description = "One simple, privacy-aware converter for video, audio, images, documents and data."
 readme = "README.md"
 license = "MIT"
@@ -43,6 +43,9 @@ omniconvert = "omniconverter.cli:main"
 
 [project.gui-scripts]
 omniconverter = "omniconverter.gui.app:main"
+
+[tool.hatch.version]
+path = "src/omniconverter/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/omniconverter"]

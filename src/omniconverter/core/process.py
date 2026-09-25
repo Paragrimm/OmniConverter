@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from omniconverter.core.errors import Cancelled, ConversionError
+from omniconverter.runtime import child_env
 
 _CREATIONFLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
@@ -51,7 +52,7 @@ def run(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=cwd,
-            env=env,
+            env=child_env(env),
             text=True,
             encoding="utf-8",
             errors="replace",

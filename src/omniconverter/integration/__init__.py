@@ -6,6 +6,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from omniconverter import runtime
 from omniconverter.core.formats import FORMATS, Format
 
 RESOURCES = Path(__file__).resolve().parent.parent / "resources"
@@ -21,7 +22,10 @@ def supported_source_formats() -> list[Format]:
 
 def launcher_command() -> list[str]:
     """Command that opens the GUI; file paths get appended."""
-    if getattr(sys, "frozen", False):
+    appimage = runtime.appimage_path()
+    if appimage:
+        return [appimage]
+    if runtime.is_frozen():
         exe = Path(sys.executable)
         gui = exe.with_name("OmniConverter.exe" if sys.platform == "win32" else "OmniConverter")
         return [str(gui if gui.exists() else exe)]
