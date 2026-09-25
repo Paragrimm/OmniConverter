@@ -75,9 +75,11 @@ def test_shortcut_files_encode_their_url(converter, tmp_path, name, content):
 
 
 def test_text_files_and_vcards(converter, tmp_path):
-    vcard = "BEGIN:VCARD\nVERSION:3.0\nFN:Mibo Owl\nEND:VCARD"
+    # Bytes, not write_text(): that would turn "\n" into "\r\n" on Windows only. vCards use
+    # CRLF, and the content is encoded exactly as it is in the file.
+    vcard = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Mibo Owl\r\nEND:VCARD"
     path = tmp_path / "mibo.vcf"
-    path.write_text(vcard + "\n", encoding="utf-8")
+    path.write_bytes((vcard + "\r\n").encode("utf-8"))
     out = converter.convert(converter.inspect(path), get_format("qr-png"), tmp_path / "v.png")
     assert_encodes(out, vcard)
 
