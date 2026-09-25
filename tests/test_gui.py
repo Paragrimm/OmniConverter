@@ -63,6 +63,46 @@ def test_png_to_jpg_end_to_end(window, qtbot, tmp_path):
         assert im.mode == "RGB" and im.size == (64, 32)
 
 
+def test_back_to_options_after_export_tries_another_format(window, qtbot, tmp_path):
+    src = tmp_path / "picture.png"
+    Image.new("RGB", (16, 16), "teal").save(src)
+    window.open_files([str(src)])
+    target_button(window, "jpg").click()
+    window.config_page.convert_button.click()
+    qtbot.waitUntil(lambda: window.stack.currentWidget() is window.result_page, timeout=10000)
+    result = window.result_page
+    assert result.again_button.isVisibleTo(result)
+
+    result.again_button.click()  # same file, same choices – no need to open it again
+    page = window.config_page
+    assert window.stack.currentWidget() is page
+    assert [s.path for s in page.sources] == [src]
+    assert page.target.id == "jpg" and target_button(window, "jpg").isChecked()
+    assert page.output_label.toolTip() == str(tmp_path / "picture (1).jpg")
+
+    target_button(window, "webp").click()
+    page.convert_button.click()
+    qtbot.waitUntil(lambda: window.stack.currentWidget() is window.result_page, timeout=10000)
+    assert window.result_page.outputs == [tmp_path / "picture.webp"]
+    assert (tmp_path / "picture.jpg").is_file()
+
+
+def test_back_to_options_never_overwrites_a_chosen_file(window, qtbot, tmp_path):
+    src = tmp_path / "picture.png"
+    Image.new("RGB", (16, 16), "teal").save(src)
+    window.open_files([str(src)])
+    target_button(window, "jpg").click()
+    page = window.config_page
+    page.custom_output = tmp_path / "out" / "mine.jpg"
+    page.convert_button.click()
+    qtbot.waitUntil(lambda: window.stack.currentWidget() is window.result_page, timeout=10000)
+    window.result_page.again_button.click()
+    assert page.custom_output == tmp_path / "out" / "mine (1).jpg"
+    page.convert_button.click()
+    qtbot.waitUntil(lambda: window.stack.currentWidget() is window.result_page, timeout=10000)
+    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == ["mine (1).jpg", "mine.jpg"]
+
+
 def test_unsupported_file_shows_error(window, tmp_path):
     bad = tmp_path / "file.xyz"
     bad.write_text("?")

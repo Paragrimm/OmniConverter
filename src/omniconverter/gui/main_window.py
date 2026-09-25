@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 
 from omniconverter import APP_NAME
 from omniconverter.config import Settings
-from omniconverter.core.converter import Converter, SourceFile
+from omniconverter.core.converter import Converter, SourceFile, unique_path
 from omniconverter.core.errors import ConversionError
 from omniconverter.core.formats import CATEGORY_ORDER, Category, Format
 from omniconverter.core.registry import TargetChoice
@@ -509,23 +509,23 @@ class ResultPage(QWidget):
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
+        # Back to the same file's options, e.g. to try another format or other settings.
+        self.again_button = QPushButton(t("gui.back_to_options"))
+        self.again_button.clicked.connect(window.back_to_config)
         self.open_button = QPushButton(t("gui.open"))
         self.open_button.clicked.connect(lambda: open_file(self.outputs[0]))
         self.folder_button = QPushButton(t("gui.show_in_folder"))
         self.folder_button.clicked.connect(lambda: show_in_folder(self.outputs[0]))
-        self.again_button = QPushButton(t("gui.back_to_options"))
-        self.again_button.clicked.connect(window.back_to_config)
         self.new_button = QPushButton(t("gui.new_file"))
         self.new_button.setObjectName("Primary")
         self.new_button.clicked.connect(window.reset)
-        for b in (self.open_button, self.folder_button, self.again_button, self.new_button):
+        for b in (self.again_button, self.open_button, self.folder_button, self.new_button):
             buttons.addWidget(b)
         buttons.addStretch(1)
         layout.addLayout(buttons)
         layout.addWidget(self.credit)
 
-    def show_result(self, outputs: list[Path], errors: list[tuple[str, str, str]],
-                    generated: bool = False) -> None:
+    def show_result(self, outputs: list[Path], errors: list[tuple[str, str, str]]) -> None:
         self.outputs = outputs
         owl = not errors and self.emote.is_valid()
         self.emote.setVisible(owl)
@@ -560,8 +560,6 @@ class ResultPage(QWidget):
         self.details_toggle.setVisible(bool(details.strip()))
         self.open_button.setVisible(len(outputs) == 1)
         self.folder_button.setVisible(bool(outputs))
-        # Generated results: quickly try another seed or text.
-        self.again_button.setVisible(bool(errors) or generated)
 
 
 # --------------------------------------------------------------------------------------------
@@ -608,7 +606,12 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.drop_page)
 
     def back_to_config(self) -> None:
-        self.stack.setCurrentWidget(self.config_page)
+        page = self.config_page
+        if page.custom_output is not None and len(page.sources) == 1:
+            # The chosen file holds the last result now; a second run must not overwrite it.
+            page.custom_output = unique_path(page.custom_output)
+        page._update_output()
+        self.stack.setCurrentWidget(page)
 
     def _escape(self) -> None:
         if self.stack.currentWidget() is self.progress_page:
@@ -734,7 +737,7 @@ class MainWindow(QMainWindow):
         worker.job_failed.connect(
             lambda i, msg, det: self._errors.append((jobs[i].source.name, msg, det))
         )
-        worker.finished.connect(lambda: self._on_worker_finished(jobs))
+        worker.finished.connect(self._on_worker_finished)
         self.worker = worker
         self.progress_page.cancel.setEnabled(True)
         self.stack.setCurrentWidget(self.progress_page)
@@ -756,15 +759,14 @@ class MainWindow(QMainWindow):
             self.progress_page.detail.setText(t("gui.cancelling"))
             self.worker.cancel()
 
-    def _on_worker_finished(self, jobs: list[Job]) -> None:
+    def _on_worker_finished(self) -> None:
         worker, self.worker = self.worker, None
         if worker is not None and worker.cancelled and not self._outputs:
             self.config_page.note.setText(t("gui.cancelled"))
             self.stack.setCurrentWidget(self.config_page)
             self.config_page._update_output()
             return
-        generated = any(job.source.path is None for job in jobs)
-        self.result_page.show_result(self._outputs, self._errors, generated)
+        self.result_page.show_result(self._outputs, self._errors)
         self.stack.setCurrentWidget(self.result_page)
         # Default output names may have been taken now – refresh for a second run.
         QTimer.singleShot(0, self.config_page._update_output)

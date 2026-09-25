@@ -365,7 +365,7 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "gui.show_details": ("Details anzeigen", "Show details"),
     "gui.open": ("Öffnen", "Open"),
     "gui.show_in_folder": ("Im Ordner anzeigen", "Show in folder"),
-    "gui.back_to_options": ("Zurück zu den Optionen", "Back to options"),
+    "gui.back_to_options": ("← Zurück zu den Optionen", "← Back to options"),
     "gui.new_file": ("Weitere Datei", "Another file"),
     "gui.settings.title": ("Einstellungen", "Settings"),
     "gui.settings.language": ("Sprache", "Language"),
