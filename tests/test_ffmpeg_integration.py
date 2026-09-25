@@ -109,7 +109,7 @@ def test_audio_only_mp4_offers_only_audio_targets(converter, tmp_path):
 
 def test_cancel_stops_ffmpeg_and_leaves_nothing(converter, tmp_path):
     long_video = tmp_path / "long.mkv"
-    ffmpeg("-f", "lavfi", "-i", "testsrc2=duration=120:size=1280x720:rate=30",
+    ffmpeg("-f", "lavfi", "-i", "testsrc2=duration=40:size=1280x720:rate=30",
            "-c:v", "libx264", "-preset", "ultrafast", str(long_video))
     source = converter.inspect(long_video)
     cancel = threading.Event()

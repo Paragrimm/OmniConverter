@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from omniconverter.core import options as opts
+from omniconverter.core import process
 from omniconverter.core.backend import (
     Backend,
     ConversionContext,
@@ -126,7 +127,7 @@ class Converter:
             path = exc.filename or str(out.parent)
             raise ConversionError(t("error.permission", path=path), str(exc)) from exc
         finally:
-            tmp.unlink(missing_ok=True)
+            process.remove_quietly(tmp)  # must never mask the original error
         return out
 
 

@@ -1,6 +1,9 @@
 """GUI flows with pytest-qt (runs headless with QT_QPA_PLATFORM=offscreen)."""
 
+import subprocess
+import sys
 import uuid
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -118,14 +121,35 @@ def test_options_form_visibility_and_validation(qtbot):
     assert not form.widget("fast").isVisible()  # hidden in the collapsed "Advanced" section
 
 
+_CLIENT = """
+import sys
+from PySide6.QtCore import QCoreApplication
+from omniconverter.gui.single_instance import forward
+app = QCoreApplication([])
+sys.exit(0 if forward(sys.argv[1], sys.argv[2:]) else 3)
+"""
+
+
 def test_single_instance_forwards_files(qtbot, tmp_path):
+    # The second launch is a real separate process, as when Explorer starts one per file.
     name = f"omniconverter-test-{uuid.uuid4().hex[:8]}"
     primary = SingleInstance(name)
     assert primary.acquire_or_forward([]) is True
-    second = SingleInstance(name)
-    with qtbot.waitSignal(primary.files_received, timeout=5000) as blocker:
-        assert second.acquire_or_forward([str(tmp_path / "x.mp4")]) is False
-    assert blocker.args[0] == [str((tmp_path / "x.mp4").resolve())]
+    files = [str(tmp_path / "x.mp4"), str(tmp_path / "ü ber.png")]
+    try:
+        with qtbot.waitSignal(primary.files_received, timeout=10000) as blocker:
+            client = subprocess.Popen([sys.executable, "-c", _CLIENT, name, *files])
+        qtbot.waitUntil(lambda: client.poll() is not None, timeout=10000)  # keep serving
+        assert client.returncode == 0
+        assert blocker.args[0] == [str(Path(f).resolve()) for f in files]
+    finally:
+        primary.close()
+
+
+def test_forward_without_primary_returns_false():
+    from omniconverter.gui.single_instance import forward
+
+    assert forward(f"omniconverter-none-{uuid.uuid4().hex[:8]}", ["x"]) is False
 
 
 def test_settings_dialog_tools_and_context_menu(qtbot, converter, tmp_path, monkeypatch):

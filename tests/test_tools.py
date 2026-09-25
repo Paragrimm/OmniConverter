@@ -25,7 +25,7 @@ def test_override_beats_path(tmp_path, monkeypatch):
     locator = ToolLocator({"ffmpeg": str(exe)})
     assert locator.find("ffmpeg") == str(exe)
     locator.set_override("ffmpeg", None)
-    assert locator.find("ffmpeg") is None
+    assert locator.find("ffmpeg") != str(exe)  # may still find one in a well-known location
 
 
 def test_env_variable(tmp_path, monkeypatch):

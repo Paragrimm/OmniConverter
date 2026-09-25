@@ -36,6 +36,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     window = MainWindow(Converter(ToolLocator(settings.tool_paths)), settings)
     instance.files_received.connect(window.open_files)
+    app.aboutToQuit.connect(instance.close)
     window.show()
     if paths:
         window.open_files(paths)
