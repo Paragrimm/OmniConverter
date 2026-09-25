@@ -1,3 +1,4 @@
+import os
 import stat
 import sys
 
@@ -5,6 +6,11 @@ import pytest
 
 from omniconverter.core.errors import ToolMissingError
 from omniconverter.core.tools import TOOLS, ToolLocator, env_var_name, install_hint
+
+
+def same_path(found, expected):
+    """``shutil.which`` on Windows may return the PATHEXT spelling, e.g. ``soffice.EXE``."""
+    return found is not None and os.path.normcase(found) == os.path.normcase(str(expected))
 
 
 def fake_exe(path):
@@ -42,7 +48,7 @@ def test_found_on_path(tmp_path, monkeypatch):
     name = "soffice.exe" if sys.platform == "win32" else "soffice"
     fake_exe(tmp_path / name)
     monkeypatch.setenv("PATH", str(tmp_path))
-    assert ToolLocator().find("soffice") == str(tmp_path / name)
+    assert same_path(ToolLocator().find("soffice"), tmp_path / name)
 
 
 def test_missing_tool(monkeypatch):
@@ -67,7 +73,7 @@ def test_rescan_clears_cache(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", str(tmp_path))
     assert locator.find("pandoc") is None  # cached
     locator.rescan()
-    assert locator.find("pandoc") == str(tmp_path / name)
+    assert same_path(locator.find("pandoc"), tmp_path / name)
 
 
 def test_install_hints_mention_package():

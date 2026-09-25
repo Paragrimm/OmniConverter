@@ -35,8 +35,8 @@ MESSAGES: dict[str, tuple[str, str]] = {
         "The conversion did not produce a file.",
     ),
     "error.permission": (
-        "Keine Schreibrechte für „{path}“.",
-        "No permission to write to “{path}”.",
+        "Kein Zugriff auf „{path}“ (fehlende Rechte oder von einem anderen Programm geöffnet).",
+        "Access to “{path}” denied (missing permissions or opened by another program).",
     ),
     "error.no_common_target": (
         "Für diese Dateien gibt es kein gemeinsames Zielformat.",

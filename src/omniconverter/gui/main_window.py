@@ -523,7 +523,11 @@ class MainWindow(QMainWindow):
         dialog.exec()
         if self.stack.currentWidget() is self.config_page and self.config_page.sources:
             # Tools may have been added: refresh which targets are available.
-            sources = [self.converter.inspect(s.path) for s in self.config_page.sources]
+            try:
+                sources = [self.converter.inspect(s.path) for s in self.config_page.sources]
+            except ConversionError as exc:  # e.g. the file was deleted meanwhile
+                self.config_page.note.setText(exc.message)
+                return
             self.config_page.load(sources, self.converter.targets(sources), keep_target=True)
 
     # -- opening files ----------------------------------------------------------------------
@@ -567,8 +571,7 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.drop_page)
             return
         note = t("gui.skipped", n=len(skipped)) if skipped else ""
-        if skipped:
-            self.config_page.note.setToolTip("\n".join(skipped))
+        self.config_page.note.setToolTip("\n".join(skipped))
         self.config_page.load(sources, choices, note, keep_target=merge)
         self.stack.setCurrentWidget(self.config_page)
 

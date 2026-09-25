@@ -111,7 +111,9 @@ class Converter:
         out.parent.mkdir(parents=True, exist_ok=True)
         tmp = out.with_name(f".{out.stem}.omni-{secrets.token_hex(4)}{out.suffix}")
         try:
-            with tempfile.TemporaryDirectory(prefix="omniconverter-") as work:
+            # Cleanup errors (e.g. a file still locked on Windows) must not fail a finished job.
+            with tempfile.TemporaryDirectory(prefix="omniconverter-",
+                                             ignore_cleanup_errors=True) as work:
                 ctx = ConversionContext(self.locator, Path(work), cancel, on_progress)
                 ctx.progress(0.0)
                 backend.convert(request, tmp, ctx)
@@ -121,7 +123,8 @@ class Converter:
                 os.replace(tmp, out)
                 ctx.progress(1.0)
         except PermissionError as exc:
-            raise ConversionError(t("error.permission", path=str(out.parent)), str(exc)) from exc
+            path = exc.filename or str(out.parent)
+            raise ConversionError(t("error.permission", path=path), str(exc)) from exc
         finally:
             tmp.unlink(missing_ok=True)
         return out
