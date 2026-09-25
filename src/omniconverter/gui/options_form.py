@@ -68,6 +68,7 @@ class OptionsForm(QWidget):
         advanced = [o for o in options if o.advanced]
         self._advanced_box = QWidget()
         self._advanced = self._make_form()
+        self._advanced.setContentsMargins(0, 0, 0, 0)
         self._advanced_box.setLayout(self._advanced)
         self._advanced_box.setVisible(False)
         self._toggle = QToolButton()

@@ -126,3 +126,33 @@ def test_single_instance_forwards_files(qtbot, tmp_path):
     with qtbot.waitSignal(primary.files_received, timeout=5000) as blocker:
         assert second.acquire_or_forward([str(tmp_path / "x.mp4")]) is False
     assert blocker.args[0] == [str((tmp_path / "x.mp4").resolve())]
+
+
+def test_settings_dialog_tools_and_context_menu(qtbot, converter, tmp_path, monkeypatch):
+    from omniconverter.gui.settings_dialog import SettingsDialog
+    from omniconverter.integration import linux
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "share"))
+    monkeypatch.setattr(linux, "_refresh", lambda _dir: None)
+    monkeypatch.setattr("sys.platform", "linux")
+    settings = Settings()
+    dialog = SettingsDialog(settings, converter.locator)
+    qtbot.addWidget(dialog)
+    assert dialog.tools_grid.rowCount() >= 4
+
+    assert dialog.menu_button.text() == "Install"
+    dialog.menu_button.click()
+    assert linux.is_installed()
+    assert dialog.menu_button.text() == "Remove"
+    dialog.menu_button.click()
+    assert not linux.is_installed()
+
+    fake = tmp_path / "ffmpeg-custom"
+    fake.write_text("#!/bin/sh\n")
+    fake.chmod(0o755)
+    dialog._set_tool("ffmpeg", str(fake))
+    assert converter.locator.find("ffmpeg") == str(fake)
+    dialog.language.setCurrentIndex(dialog.language.findData("de"))
+    dialog.accept()
+    saved = Settings.load()
+    assert saved.language == "de" and saved.tool_paths == {"ffmpeg": str(fake)}
