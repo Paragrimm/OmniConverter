@@ -1,8 +1,9 @@
 # OmniConverter
 
-**Ein Werkzeug für alles:** Videos, Musik, Bilder, Dokumente, Tabellen und Daten umwandeln –
-mit einer einzigen, simplen Oberfläche. Datei reinziehen, Zielformat klicken, fertig.
-Alles läuft **lokal auf deinem Rechner**, ohne Uploads und ohne Telemetrie.
+**Ein Werkzeug für alles:** Videos, Musik, Bilder, 3D-Modelle, Dokumente, Tabellen und Daten
+umwandeln, dazu QR-Codes, Normal-/Specular-Maps und Noise-Maps erzeugen – mit einer einzigen,
+simplen Oberfläche. Datei reinziehen, Zielformat klicken, fertig. Alles läuft **lokal auf
+deinem Rechner**, ohne Uploads und ohne Telemetrie.
 
 <p align="center">
   <img src="docs/screenshots/start.png" width="32%" alt="Startbildschirm mit Drop-Area">
@@ -22,16 +23,25 @@ Endung. Vorhandene Dateien werden nie überschrieben (`Urlaub (1).mp4`).
 |---|---|---|
 | **Video**: mp4, mkv, webm, mov, avi, wmv, flv, mpg, ts/m2ts, 3gp, ogv | mp4, mkv, webm, mov, avi, **gif**, alle Audioformate | Schneiden, Auflösung, Qualität, FPS, Ton entfernen, verlustfreies Umpacken, Lautheit normalisieren, Metadaten entfernen |
 | **GIF-Export** | gif | Schneiden, FPS, Breite, Farbanzahl, Dithering, Wiederholung (optimierte Palette) |
+| **Animiertes GIF** | **webm**, mp4, mkv, mov, avi | **Transparenz bleibt in WebM erhalten** (VP9 mit Alphakanal), Schneiden, Auflösung, Qualität, FPS |
 | **Audio**: mp3, wav, flac, ogg, opus, m4a, aac, aiff, wma | mp3, wav, flac, ogg, opus, m4a, aiff | **Lautheit normalisieren (EBU R128, zwei Durchläufe)**, Bitrate, Abtastrate, Mono/Stereo, Ein-/Ausblenden, Schneiden, Cover bleibt erhalten |
 | **Bild**: png, jpg, webp, avif, heic, bmp, tiff, gif, ico, tga | png, jpg, webp, avif, heic, bmp, tiff, gif, ico, **pdf** | Größe ändern, Qualität, verlustfrei, EXIF/GPS entfernen, Drehung laut EXIF, Hintergrund für Transparenz, Animationen bleiben erhalten |
+| **Textur**: jedes Bild oben | **Normal-Map**, **Specular-Map** (PNG, z. B. `stein_normal.png`) | Stärke, Glättung, Höhe umkehren, OpenGL/DirectX, nahtlos kachelbar; Specular mit Helligkeit/Kontrast, umgekehrt als Roughness-Map |
+| **3D-Modell**: obj, glb, gltf, fbx, stl, ply | obj, glb, gltf, fbx, stl, ply | Skalierung (cm/m/mm/Zoll), Oben-Achse Y↔Z, OBJ mit `.mtl` und Texturen, glTF als eine Datei; FBX über Blender (Animationen bleiben bei FBX ↔ GLB erhalten) |
+| **QR-Code**: Link oder Text (eintippen, einfügen oder reinziehen), txt, md, vCard (vcf), Verknüpfungen (url, webloc) | PNG, SVG | Fehlerkorrektur, Größe, Farben, transparenter Hintergrund. Aus Dateien wird der Inhalt kodiert (bis ca. 2,9 KB), aus Verknüpfungen die Adresse |
+| **Noise-Map** (ohne Quelldatei) | png, jpg, webp, bmp, tiff | **Seed** (gleicher Seed = gleiches Bild, 🎲 würfelt), Wolken, Perlin, Gebirge, Zellen, weißes Rauschen, Größe, Strukturgröße, Detailstufen, nahtlos kachelbar, Farbverlauf |
 | **Dokument**: md, html, docx, odt, epub, rst, tex, rtf, txt, doc | pdf, docx, odt, rtf, txt, md, html, epub, tex | Markdown → PDF über Pandoc + LibreOffice |
 | **Tabelle**: xlsx, xls, ods, csv, tsv | xlsx, ods, csv, tsv, pdf, json, yaml, toml | Trennzeichen erkennen, Excel-kompatibles CSV, Tabellenblatt wählen |
 | **Präsentation**: pptx, ppt, odp | pdf, pptx, odp | |
 | **Daten**: json, yaml, toml | untereinander sowie csv, tsv, xlsx | verschachtelte Daten werden zu Spalten wie `user.name` |
 
 Mehrere Dateien auf einmal (Drag & Drop oder Mehrfachauswahl im Kontextmenü) werden
-nacheinander umgewandelt. Angeboten werden dann nur die Zielformate, die für alle Dateien
-passen.
+nacheinander umgewandelt, z. B. MP3, WAV und FLAC gemeinsam nach Opus. Angeboten werden dann
+nur die Zielformate, die für alle Dateien passen.
+
+QR-Codes und Noise-Maps brauchen keine Datei: Auf der Startseite gibt es ein Feld für Link oder
+Text (Strg+V oder ein Link aus dem Browser tun es auch) und den Knopf „Noise-Map erzeugen“.
+Die Ergebnisse landen im Bilder-Ordner, z. B. als `qr-code.png` oder `noise-42.png`.
 
 ## Datenschutz
 
@@ -41,7 +51,9 @@ passen.
   (`-protocol_whitelist file,pipe`), damit eine Playlist nichts aus dem Internet nachlädt.
   Pandoc läuft mit `--sandbox`, zusätzlich wird sein Netzwerkzugriff auf einen toten Proxy
   umgeleitet. LibreOffice startet mit einem eigenen, temporären Profil und hinterlässt
-  keinen Verlauf.
+  keinen Verlauf. Blender läuft mit Werkseinstellungen (`--factory-startup`), ohne eigene
+  Add-ons und ebenfalls mit einem temporären Profil. 3D-Modelle dürfen nur Dateien aus
+  ihrem eigenen Ordner nachladen, z. B. Texturen.
 * **Metadaten entfernen** ist für Bilder und Videos standardmäßig aktiv: GPS-Position,
   Kamera- und Autorinfos kommen nicht mit. Bei Musik bleiben die Tags erhalten, lassen sich
   aber abschalten.
@@ -62,7 +74,7 @@ Pakete, ohne Python und ohne Klonen des Repos:
 | **Windows** | `…-windows-x64-setup.exe` | Installer ohne Admin-Rechte; richtet auf Wunsch das Kontextmenü ein, die Deinstallation entfernt es wieder |
 | Windows portabel | `…-windows-x64-portable.zip` | entpacken, `OmniConverter.exe` starten; Einstellungen bleiben im Ordner (USB-Stick) |
 | **Linux** | `…-x86_64.AppImage` | `chmod +x` und starten; Kontextmenü mit `./OmniConverter-*.AppImage --integrate install` |
-| Debian/Ubuntu | `omniconverter_…_amd64.deb` | `sudo apt install ./omniconverter_*_amd64.deb` (holt FFmpeg, Pandoc und LibreOffice als Empfehlung mit) |
+| Debian/Ubuntu | `omniconverter_…_amd64.deb` | `sudo apt install ./omniconverter_*_amd64.deb` (holt FFmpeg, Pandoc und LibreOffice als Empfehlung mit, Blender als Vorschlag) |
 | Linux portabel | `…-linux-x86_64-portable.tar.gz` | entpacken, `OmniConverter/OmniConverter` starten |
 
 Die Windows-Dateien sind noch nicht signiert. Die SmartScreen-Warnung lässt sich mit
@@ -73,8 +85,9 @@ versteht auch das AppImage die CLI-Optionen, z. B. `./OmniConverter-*.AppImage -
 
 ### Externe Programme
 
-Bilder und Daten funktionieren sofort. Für Video/Audio, Dokumente und Office-Formate nutzt
-OmniConverter bereits installierte Programme und findet sie automatisch. Fehlt eines, sind
+Bilder, Daten, QR-Codes, Textur- und Noise-Maps sowie OBJ, glTF/GLB, STL und PLY funktionieren
+sofort. Für Video/Audio, Dokumente, Office-Formate und FBX nutzt OmniConverter bereits
+installierte Programme und findet sie automatisch. Fehlt eines, sind
 die passenden Formate ausgegraut, und ein Hinweis zeigt, wie man es installiert.
 
 | Programm | wofür | Windows | Linux (Debian/Ubuntu) |
@@ -82,9 +95,11 @@ die passenden Formate ausgegraut, und ein Hinweis zeigt, wie man es installiert.
 | FFmpeg | Video, Audio, GIF | `winget install Gyan.FFmpeg` | `sudo apt install ffmpeg` |
 | Pandoc | Markdown, HTML, EPUB, … | `winget install JohnMacFarlane.Pandoc` | `sudo apt install pandoc` |
 | LibreOffice | Office-Formate, PDF | `winget install TheDocumentFoundation.LibreOffice` | `sudo apt install libreoffice` |
+| Blender | FBX (3D) | `winget install BlenderFoundation.Blender` | `sudo apt install blender` |
 
 Eigene Programmpfade lassen sich in den Einstellungen (⚙) oder per Umgebungsvariable setzen
-(`OMNICONVERTER_FFMPEG`, `OMNICONVERTER_PANDOC`, `OMNICONVERTER_SOFFICE`, …).
+(`OMNICONVERTER_FFMPEG`, `OMNICONVERTER_PANDOC`, `OMNICONVERTER_SOFFICE`,
+`OMNICONVERTER_BLENDER`, …).
 
 ### Aus dem Quellcode (Python 3.11+)
 
@@ -101,9 +116,12 @@ Danach gibt es die Befehle `omniconverter` (Oberfläche) und `omniconvert` (Komm
 ### Oberfläche
 
 1. `omniconverter` starten (oder `omniconverter datei.mov`).
-2. Datei in das Fenster ziehen oder auf die Fläche klicken.
+2. Datei in das Fenster ziehen oder auf die Fläche klicken. Für einen QR-Code einen Link
+   oder Text ins Feld darunter tippen, für eine Noise-Map „Noise-Map erzeugen“ klicken.
 3. Zielformat anklicken. Optionen sind optional, die Voreinstellungen passen.
 4. Optional „Ändern …“ für einen anderen Speicherort, dann **Umwandeln**.
+
+Während der Umwandlung kocht eine Eule, danach freut sich eine Eule mit Brille.
 
 ### Kontextmenü
 
@@ -129,6 +147,15 @@ omniconvert podcast.wav --to mp3 -s normalize=podcast -s bitrate=128
 omniconvert foto.heic --to jpg -s resize=fit -s max_width=1920 -s max_height=1080
 omniconvert bericht.md --to pdf
 omniconvert *.png --to webp -o ./webp/          # mehrere Dateien → Ordner
+omniconvert *.mp3 *.wav *.flac --to opus         # gemischte Formate in ein Ziel
+omniconvert animation.gif --to webm              # Transparenz bleibt erhalten
+omniconvert stein.jpg --to normal-map -s strength=40 -s convention=directx
+omniconvert stein.jpg --to specular-map -s invert=yes   # Roughness-Map
+omniconvert modell.fbx --to glb -s scale=cm_to_m
+omniconvert teil.obj --to stl -s up_axis=y_to_z
+omniconvert --text "https://example.com" --to qr          # → qr-code.png
+omniconvert kontakt.vcf --to qr-svg                       # → kontakt_qr.svg
+omniconvert --generate noise --to png -s seed=42 -s kind=ridged -s width=2048
 omniconvert --list bericht.docx                  # mögliche Zielformate
 omniconvert --options clip.mp4 --to gif          # Optionen und erlaubte Werte
 omniconvert --tools                              # gefundene Programme
@@ -144,6 +171,12 @@ Zeiten gehen als `90`, `1:30` oder `0:01:30.5`. Wichtige Optionen:
 | Bild | `resize` (original, percent, fit) + `percent` / `max_width` / `max_height`, `quality`, `lossless`, `background`, `strip_metadata` |
 | Daten/Tabellen | `delimiter` (comma, semicolon, tab), `excel_bom`, `sheet`, `indent`, `detect_numbers` |
 | Pandoc | `allow_resources` (lokale Bilder einbinden, Netzwerk bleibt blockiert) |
+| GIF → Video | `start`, `end`, `resolution` + `width`, `quality`, `fps`, `keep_transparency` (nur WebM) |
+| → `normal-map` | `strength` (1–100), `blur` (0–20 px), `invert`, `convention` (opengl, directx), `seamless` |
+| → `specular-map` | `brightness` (−100–100 %), `contrast` (0–400 %), `invert` (Roughness-Map) |
+| 3D-Modell | `scale` (none, cm_to_m, m_to_cm, mm_to_m, m_to_mm, inch_to_mm), `up_axis` (keep, y_to_z, z_to_y), `ascii` (STL/PLY) |
+| → `qr` / `qr-svg` | `error_correction` (l, m, q, h), `size` (px, nur PNG), `dark`, `light`, `transparent`, `border` |
+| `--generate noise` | `kind` (fbm, perlin, ridged, worley, white), `seed`, `width`, `height`, `scale`, `octaves`, `roughness`, `seamless`, `color_low`, `color_high` |
 
 ## Entwicklung
 
@@ -154,15 +187,18 @@ ruff check .
 pytest                      # GUI-Tests laufen headless (QT_QPA_PLATFORM=offscreen)
 ```
 
-Tests, die FFmpeg, Pandoc oder LibreOffice brauchen, werden übersprungen, wenn das
+Tests, die FFmpeg, Pandoc, LibreOffice oder Blender brauchen, werden übersprungen, wenn das
 Programm fehlt. Die Testmedien entstehen zur Laufzeit (FFmpeg `lavfi`, Pillow).
 
 ```
 src/omniconverter/
   core/          Qt-freier Kern: Formate, Options-Schema, Registry, Converter, Tools
-  backends/      ffmpeg.py (+ ffmpeg_args.py), image.py, document.py, data.py
+  backends/      ffmpeg.py (+ ffmpeg_args.py), image.py, document.py, data.py,
+                 texture.py (Normal-/Specular-Maps), noise.py, qr.py,
+                 model3d.py (trimesh + Blender für FBX)
   gui/           PySide6-Oberfläche (Seiten, dynamisches Options-Formular, Worker)
   integration/   Kontextmenü für Windows (Registry) und Linux (Desktop-Dateien)
+  resources/     Icons und die Eulen-Emotes (emotes/, CC BY 4.0)
   cli.py         omniconvert
   i18n.py        Deutsch/Englisch
 ```
@@ -192,6 +228,9 @@ Passt ein Tag nicht zur Version im Code, bricht der Release-Job ab.
 `options()`, `convert()`) und in `backends/__init__.py` eintragen. GUI und CLI übernehmen
 Zielformate und Optionen automatisch aus dem Schema. Bieten mehrere Backends dieselbe
 Umwandlung an, gewinnt das mit der höchsten Priorität, dessen Programme installiert sind.
+Ziele, die ein Bild einer bestimmten Art erzeugen (Normal-Map, QR-Code), sind eigene Formate
+mit `detect=False` und einem Namenszusatz (`_normal`). Quellen ohne Datei (Link/Text, Noise)
+gehören zur Kategorie `generator`, und ihr Backend benennt das Ergebnis über `output_stem()`.
 
 ## Ideen für später
 
@@ -199,7 +238,15 @@ Videovorschau mit Schnitt-Regler, Hardware-Encoding, PDF → Bilder/Text, SVG, U
 Presets, optional mitgeliefertes FFmpeg, signierte Windows-Pakete, Flatpak, modernes
 Windows-11-Kontextmenü, macOS.
 
+## Credits
+
+Emotes by [RoamingOwl](https://roamingowl.itch.io/owlish-emotes) – die kochende und die
+Nerd-Eule stammen aus dem *Owlish Emotes Set 1.4* von Thomas Mayer (RoamingOwl), lizenziert
+unter [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Die Dateien liegen
+unverändert in `src/omniconverter/resources/emotes/`.
+
 ## Lizenz
 
-MIT – siehe [LICENSE](LICENSE). OmniConverter ruft FFmpeg, Pandoc und LibreOffice als
-eigenständige Programme auf und liefert sie nicht mit. Es gelten deren eigene Lizenzen.
+MIT – siehe [LICENSE](LICENSE). Ausgenommen sind die Eulen-Emotes (CC BY 4.0, siehe
+Credits). OmniConverter ruft FFmpeg, Pandoc, LibreOffice und Blender als eigenständige
+Programme auf und liefert sie nicht mit. Es gelten deren eigene Lizenzen.

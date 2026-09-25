@@ -4,6 +4,8 @@
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files
+
 ROOT = Path(SPECPATH).parent
 SRC = ROOT / "src"
 RESOURCES = SRC / "omniconverter" / "resources"
@@ -12,7 +14,8 @@ IS_WINDOWS = sys.platform == "win32"
 
 common = dict(
     pathex=[str(SRC)],
-    datas=[(str(RESOURCES), "omniconverter/resources")],
+    # trimesh reads its own resources (e.g. glTF templates) at runtime
+    datas=[(str(RESOURCES), "omniconverter/resources"), *collect_data_files("trimesh")],
     hiddenimports=["pillow_heif"],
     excludes=[
         "tkinter",

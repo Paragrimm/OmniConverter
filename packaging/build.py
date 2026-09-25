@@ -59,6 +59,7 @@ DEB_DEPENDS = [
 DEB_RECOMMENDS = [
     "ffmpeg", "pandoc", "libreoffice-writer", "libreoffice-calc", "libreoffice-impress",
 ]
+DEB_SUGGESTS = ["blender"]  # only for FBX, and large
 
 
 def log(message: str) -> None:
@@ -196,13 +197,15 @@ def deb() -> Path:
         f"Installed-Size: {size // 1024}",  # KiB
         f"Depends: {', '.join(DEB_DEPENDS)}",
         f"Recommends: {', '.join(DEB_RECOMMENDS)}",
+        f"Suggests: {', '.join(DEB_SUGGESTS)}",
         "Section: graphics",
         "Priority: optional",
         "Homepage: https://github.com/Paragrimm/OmniConverter",
         "Description: one simple, privacy-aware converter for many file types",
-        " Converts videos, music, images, documents, spreadsheets and data files",
-        " locally with a drag-and-drop GUI, a command line and a file manager",
-        " context menu. Uses FFmpeg, Pandoc and LibreOffice when installed.",
+        " Converts videos, music, images, 3D models, documents, spreadsheets and data",
+        " files locally with a drag-and-drop GUI, a command line and a file manager",
+        " context menu, and creates QR codes, normal/specular maps and noise maps.",
+        " Uses FFmpeg, Pandoc, LibreOffice and Blender when installed.",
         "",
     ]), encoding="utf-8")
     out = OUT / f"omniconverter_{__version__}_{DEB_ARCH}.deb"

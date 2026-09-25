@@ -8,10 +8,13 @@
 | Debian / Ubuntu | `omniconverter_…_amd64.deb` | `sudo apt install ./omniconverter_*_amd64.deb` – bringt FFmpeg, Pandoc und LibreOffice als empfohlene Pakete gleich mit |
 | Linux portabel | `OmniConverter-…-linux-x86_64-portable.tar.gz` | Entpacken und `OmniConverter/OmniConverter` starten |
 
-Für Video/Audio, Dokumente und Office-Formate nutzt OmniConverter installierte Programme:
-FFmpeg (`winget install Gyan.FFmpeg`), Pandoc (`winget install JohnMacFarlane.Pandoc`) und
-LibreOffice (`winget install TheDocumentFoundation.LibreOffice`). Bilder und Daten
-funktionieren ohne Zusatzprogramme.
+Für Video/Audio, Dokumente, Office-Formate und FBX nutzt OmniConverter installierte
+Programme: FFmpeg (`winget install Gyan.FFmpeg`), Pandoc (`winget install
+JohnMacFarlane.Pandoc`), LibreOffice (`winget install TheDocumentFoundation.LibreOffice`) und
+Blender (`winget install BlenderFoundation.Blender`). Bilder, Daten, QR-Codes, Textur- und
+Noise-Maps sowie OBJ, glTF/GLB, STL und PLY funktionieren ohne Zusatzprogramme.
+
+Emotes by [RoamingOwl](https://roamingowl.itch.io/owlish-emotes) (CC BY 4.0).
 
 Die Windows-Dateien sind (noch) nicht signiert. Die SmartScreen-Warnung lässt sich mit
 „Weitere Informationen“ → „Trotzdem ausführen“ überspringen. Prüfsummen stehen in
