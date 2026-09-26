@@ -211,6 +211,12 @@ class ConfigPage(QWidget):
         self.body_layout.addStretch(1)
 
         outer.addWidget(hline())
+        self.note = QLabel()  # e.g. skipped files or "cancelled"; only shown with a message
+        self.note.setObjectName("Muted")
+        self.note.setWordWrap(True)
+        self.note.hide()
+        outer.addWidget(self.note)
+
         out_row = QHBoxLayout()
         out_caption = QLabel(t("gui.save_to"))
         out_caption.setObjectName("Muted")
@@ -220,22 +226,15 @@ class ConfigPage(QWidget):
         self.output_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.change_output = QPushButton(t("gui.change"))
         self.change_output.clicked.connect(self._choose_output)
-        out_row.addWidget(out_caption)
-        out_row.addWidget(self.output_label, 1)
-        out_row.addWidget(self.change_output)
-        outer.addLayout(out_row)
-
-        actions = QHBoxLayout()
-        self.note = QLabel()
-        self.note.setObjectName("Muted")
-        self.note.setWordWrap(True)
-        actions.addWidget(self.note, 1)
         self.convert_button = QPushButton(t("gui.convert"))
         self.convert_button.setObjectName("Primary")
         self.convert_button.setDefault(True)
         self.convert_button.clicked.connect(window.start_conversion)
-        actions.addWidget(self.convert_button)
-        outer.addLayout(actions)
+        out_row.addWidget(out_caption)
+        out_row.addWidget(self.output_label, 1)
+        out_row.addWidget(self.change_output)
+        out_row.addWidget(self.convert_button)
+        outer.addLayout(out_row)
 
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
@@ -248,7 +247,7 @@ class ConfigPage(QWidget):
         self.sources = sources
         self.target = None
         self.custom_output = None
-        self.note.setText(note)
+        self.set_note(note)
         self.preview.clear()
         self._fill_header()
         self._fill_targets(choices)
@@ -261,6 +260,10 @@ class ConfigPage(QWidget):
         self._update_output()
         if self.target is None:
             self.preview.hide()
+
+    def set_note(self, text: str) -> None:
+        self.note.setText(text)
+        self.note.setVisible(bool(text))
 
     def _fill_header(self) -> None:
         is_text = len(self.sources) == 1 and self.sources[0].format.id == "text"
@@ -357,7 +360,7 @@ class ConfigPage(QWidget):
         try:
             options = self.window_.converter.options(self.sources[0], fmt)
         except ConversionError as exc:
-            self.note.setText(exc.message)
+            self.set_note(exc.message)
             options = []
         self._set_form(OptionsForm(options, self.sources[0].media))
         self._update_output()
@@ -680,7 +683,7 @@ class MainWindow(QMainWindow):
             try:
                 sources = [self.converter.inspect(s.path) for s in self.config_page.sources]
             except ConversionError as exc:  # e.g. the file was deleted meanwhile
-                self.config_page.note.setText(exc.message)
+                self.config_page.set_note(exc.message)
                 return
             self.config_page.load(sources, self.converter.targets(sources), keep_target=True)
 
@@ -816,7 +819,7 @@ class MainWindow(QMainWindow):
     def _on_worker_finished(self) -> None:
         worker, self.worker = self.worker, None
         if worker is not None and worker.cancelled and not self._outputs:
-            self.config_page.note.setText(t("gui.cancelled"))
+            self.config_page.set_note(t("gui.cancelled"))
             self.stack.setCurrentWidget(self.config_page)
             self.config_page._update_output()
             self.config_page.preview.resume()

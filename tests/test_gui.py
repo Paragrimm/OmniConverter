@@ -63,6 +63,24 @@ def test_png_to_jpg_end_to_end(window, qtbot, tmp_path):
         assert im.mode == "RGB" and im.size == (64, 32)
 
 
+def test_footer_is_one_row_and_the_note_only_shows_with_a_message(window, qtbot, tmp_path):
+    good, bad = tmp_path / "picture.png", tmp_path / "file.xyz"
+    Image.new("RGB", (16, 16), "teal").save(good)
+    bad.write_text("?")
+    window.open_files([str(good)])
+    page = window.config_page
+    target_button(window, "jpg").click()
+    qtbot.waitUntil(lambda: page.convert_button.geometry().width() > 0)
+    convert, change = page.convert_button.geometry(), page.change_output.geometry()
+    assert abs(convert.center().y() - change.center().y()) <= 2  # "Convert" next to "Change …"
+    assert convert.left() > change.right()
+    assert not page.note.isVisibleTo(page)
+
+    window.open_files([str(good), str(bad)])  # one of them cannot be converted
+    assert page.note.isVisibleTo(page) and page.note.text() == "1 file(s) skipped."
+    assert "file.xyz" in page.note.toolTip()
+
+
 def test_back_to_options_after_export_tries_another_format(window, qtbot, tmp_path):
     src = tmp_path / "picture.png"
     Image.new("RGB", (16, 16), "teal").save(src)
