@@ -17,6 +17,7 @@ from omniconverter.core.backend import (
     Backend,
     ConversionContext,
     ConversionRequest,
+    Preview,
     ProgressCallback,
 )
 from omniconverter.core.errors import ConversionError, OptionError, UnsupportedConversion
@@ -128,6 +129,24 @@ class Converter:
     def _backend_for(self, source: SourceFile, target: Format) -> Backend:
         backend, _conv = self.registry.resolve(source.format, target, source.media)
         return backend
+
+    # -- preview ----------------------------------------------------------------------------
+
+    def can_preview(self, source: SourceFile, target: Format) -> bool:
+        try:
+            backend = self._backend_for(source, target)
+        except ConversionError:  # unsupported, or a tool is missing
+            return False
+        return backend.can_preview(source.format, target)
+
+    def preview(self, source: SourceFile, target: Format, raw_options: Mapping[str, Any] | None,
+                work_dir: Path, *, cancel: threading.Event | None = None) -> Preview:
+        """Render a quick look at the result into *work_dir* (the caller removes it)."""
+        backend = self._backend_for(source, target)
+        values = self.resolve_options(source, target, raw_options)
+        request = ConversionRequest(source.path, source.format, target, values, source.media,
+                                    source.text)
+        return backend.preview(request, ConversionContext(self.locator, Path(work_dir), cancel))
 
     # -- conversion -------------------------------------------------------------------------
 

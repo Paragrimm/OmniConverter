@@ -8,7 +8,14 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
-from omniconverter.core.backend import Backend, Conversion, ConversionContext, ConversionRequest
+from omniconverter.backends.preview import image_frames, save_image
+from omniconverter.core.backend import (
+    Backend,
+    Conversion,
+    ConversionContext,
+    ConversionRequest,
+    Preview,
+)
 from omniconverter.core.errors import ConversionError
 from omniconverter.core.formats import Format
 from omniconverter.core.options import Kind, Option, when
@@ -21,6 +28,7 @@ MAX_SEED = 2**31 - 1
 _PIL_FORMAT = {"png": "PNG", "jpg": "JPEG", "webp": "WEBP", "bmp": "BMP", "tiff": "TIFF"}
 _STRIP_PIXELS = 1 << 20  # rows are computed in strips of about a megapixel
 _PREVIEW = 256  # samples per axis used to find the value range
+PREVIEW_SIDE = 1024  # larger maps are previewed scaled down
 
 
 class NoiseBackend(Backend):
@@ -79,6 +87,31 @@ class NoiseBackend(Backend):
             Image.fromarray(image).save(output, format=_PIL_FORMAT[target], **save)
         except (OSError, ValueError) as exc:
             raise ConversionError(t("error.image_failed"), str(exc)) from exc
+
+    def can_preview(self, source: Format, target: Format) -> bool:
+        return True
+
+    def preview(self, request: ConversionRequest, ctx: ConversionContext) -> Preview:
+        from PIL import Image
+
+        opts = request.options
+        width, height = int(opts.get("width", 1024)), int(opts.get("height", 1024))
+        factor = PREVIEW_SIDE / max(width, height)
+        if factor >= 1:  # small enough to render exactly, with the real file size
+            result = ctx.work_dir / f"result.{request.target_format.extension}"
+            self.convert(request, result, ctx)
+            frames, _durations, _size = image_frames(result, ctx, animated=False)
+            return Preview(frames, width=width, height=height,
+                           size_bytes=result.stat().st_size)
+        # Everything scaled alike keeps the number of cells, so the pattern stays the same.
+        small = {**opts, "width": max(1, round(width * factor)),
+                 "height": max(1, round(height * factor)),
+                 "scale": max(2, round(int(opts.get("scale", 256)) * factor))}
+        values = render(small, None, ctx.check_cancelled)
+        image = colorize(values, opts.get("color_low", "#000000"),
+                         opts.get("color_high", "#ffffff"))
+        frame = save_image(Image.fromarray(image), ctx.work_dir / "frame-0000.png")
+        return Preview([frame], width=width, height=height, note=t("preview.scaled"))
 
 
 # -- generation ----------------------------------------------------------------------------

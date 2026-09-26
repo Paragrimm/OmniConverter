@@ -354,6 +354,107 @@ def build_gif(
     ]
 
 
+# -- preview -------------------------------------------------------------------------------
+
+PREVIEW_REALTIME_S = 10.0  # shorter parts are previewed in real time …
+PREVIEW_MAX_FPS = 15
+PREVIEW_FRAMES = 120  # … longer ones as a time-lapse of this many frames
+PREVIEW_TIMELAPSE_FPS = 12  # playback speed of the time-lapse
+PREVIEW_WIDTH = 640
+GIF_PREVIEW_S = 10.0  # GIF previews are real GIFs of at most this length
+
+
+@dataclass(frozen=True)
+class PreviewPlan:
+    start: float
+    duration: float  # of the part shown
+    fps: float  # frames taken per second of the source
+    frame_ms: int  # display time of each frame
+    timelapse: bool
+    end_known: bool  # False: the source's length is unknown, only the first seconds are shown
+
+    @property
+    def end(self) -> float:
+        return self.start + self.duration
+
+
+def preview_plan(opts: dict[str, Any], media: MediaInfo | None) -> PreviewPlan:
+    """Which frames a video preview shows (raises like :func:`trim` for invalid cuts)."""
+    start = opts.get("start") or 0.0
+    duration = trim(start, opts.get("end"), media.duration if media else None).duration
+    fps = opts.get("fps", "original")
+    source_fps = float(fps) if fps != "original" else (media.fps if media and media.fps else 25.0)
+    rate = min(source_fps, PREVIEW_MAX_FPS)
+    if duration is None:
+        return PreviewPlan(start, PREVIEW_REALTIME_S, rate, round(1000 / rate), False, False)
+    if duration <= PREVIEW_REALTIME_S:
+        return PreviewPlan(start, duration, rate, round(1000 / rate), False, True)
+    return PreviewPlan(start, duration, PREVIEW_FRAMES / duration,
+                       round(1000 / PREVIEW_TIMELAPSE_FPS), True, True)
+
+
+def preview_width(media: MediaInfo | None) -> int:
+    width = min(PREVIEW_WIDTH, media.width) if media and media.width else PREVIEW_WIDTH
+    return max(2, width - width % 2)
+
+
+def build_preview_frames(
+    ffmpeg: str, source: str, pattern: str, plan: PreviewPlan, width: int, *, alpha: bool = False
+) -> list[str]:
+    """Frames of the chosen part as images (*pattern* like ``frame-%04d.jpg``).
+
+    A time-lapse only decodes keyframes, so previewing an hour stays quick.
+    """
+    args = [ffmpeg, *BASE_INPUT]
+    if plan.timelapse:
+        args += ["-skip_frame", "nokey"]
+    if plan.start > 0:
+        args += ["-ss", fmt_seconds(plan.start)]
+    args += ["-i", source, "-t", fmt_seconds(plan.duration), *PROGRESS, "-map", "0:v:0",
+             "-vf", f"fps={plan.fps:.6g},scale={width}:-2:flags=bicubic",
+             "-an", "-sn", "-dn", "-frames:v", str(PREVIEW_FRAMES)]
+    args += ["-pix_fmt", "rgba"] if alpha else ["-q:v", "3"]
+    return [*args, pattern]
+
+
+def build_edge_frame(ffmpeg: str, source: str, output: str, plan: PreviewPlan, width: int, *,
+                     last: bool, alpha: bool = False) -> list[str]:
+    """The exact first or last frame of the part, e.g. around a time-lapse of keyframes.
+
+    For the last one, the final second is decoded and each frame overwrites the previous one:
+    seeking right to the end would land behind the last frame.
+    """
+    start = max(plan.start, plan.end - 1.0) if last else plan.start
+    args = [ffmpeg, *BASE_INPUT]
+    if start > 0:
+        args += ["-ss", fmt_seconds(start)]
+    args += ["-i", source, "-t", fmt_seconds(plan.end - start), "-map", "0:v:0",
+             "-vf", f"scale={width}:-2:flags=bicubic", "-an", "-sn", "-dn"]
+    args += ["-update", "1"] if last else ["-frames:v", "1"]
+    args += ["-pix_fmt", "rgba"] if alpha else ["-q:v", "3"]
+    return [*args, output]
+
+
+def video_output_size(opts: dict[str, Any], media: MediaInfo | None) -> tuple[int, int] | None:
+    """Pixel size of a video result (the scale filters in :func:`video_filters` do this)."""
+    if media is None or not media.width or not media.height:
+        return None
+    width, height = media.width, media.height
+    if opts.get("fast"):
+        return width, height
+    resolution = opts.get("resolution", "original")
+    if resolution == "custom":
+        new_width = int(opts.get("width") or 1280)
+        return new_width, _even(height * new_width / width)
+    if resolution != "original":
+        return _even(width * int(resolution) / height), int(resolution)
+    return width - width % 2, height - height % 2
+
+
+def _even(value: float) -> int:
+    return max(2, round(value / 2) * 2)
+
+
 class ProgressParser:
     """Turns ``-progress pipe:1`` lines into fractions of *total* seconds."""
 

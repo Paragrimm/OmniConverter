@@ -8,7 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from omniconverter.backends.image import SOURCES, register_heif
-from omniconverter.core.backend import Backend, Conversion, ConversionContext, ConversionRequest
+from omniconverter.backends.preview import image_frames, original_image
+from omniconverter.core.backend import (
+    Backend,
+    Conversion,
+    ConversionContext,
+    ConversionRequest,
+    Preview,
+)
 from omniconverter.core.errors import ConversionError
 from omniconverter.core.formats import Format
 from omniconverter.core.options import Kind, Option
@@ -71,6 +78,17 @@ class TextureBackend(Backend):
             result.save(output, format="PNG", optimize=bool(np.prod(pixels.shape) < 4e6))
         except (OSError, ValueError) as exc:
             raise ConversionError(t("error.image_failed"), str(exc)) from exc
+
+    def can_preview(self, source: Format, target: Format) -> bool:
+        return True
+
+    def preview(self, request: ConversionRequest, ctx: ConversionContext) -> Preview:
+        assert request.source is not None
+        result = ctx.work_dir / "result.png"
+        self.convert(request, result, ctx)
+        frames, _durations, (width, height) = image_frames(result, ctx, animated=False)
+        return Preview(frames, original=original_image(request.source, ctx), width=width,
+                       height=height, size_bytes=result.stat().st_size)
 
 
 def load_height(path: Path) -> Any:

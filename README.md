@@ -6,16 +6,22 @@ simplen Oberfläche. Datei reinziehen, Zielformat klicken, fertig. Alles läuft 
 deinem Rechner**, ohne Uploads und ohne Telemetrie.
 
 <p align="center">
-  <img src="docs/screenshots/start.png" width="32%" alt="Startbildschirm mit Drop-Area">
-  <img src="docs/screenshots/video-to-gif.png" width="32%" alt="Video in GIF umwandeln">
-  <img src="docs/screenshots/audio-normalize.png" width="32%" alt="Audio normalisieren">
+  <img src="docs/screenshots/start.png" height="230" alt="Startbildschirm mit Drop-Area">
+  <img src="docs/screenshots/video-to-gif.png" height="230"
+       alt="Video in GIF umwandeln, mit Vorschau des gewählten Ausschnitts">
+</p>
+<p align="center">
+  <img src="docs/screenshots/normal-map.png" height="230"
+       alt="Normal-Map mit Live-Vorschau neben den Optionen">
+  <img src="docs/screenshots/audio-normalize.png" height="230" alt="Audio normalisieren">
 </p>
 
 Statt Handbrake für Videos, Audacity für Musik, GIMP für Bilder und Office für Dokumente gibt
 es ein Fenster, das sich an die Datei anpasst: Nach dem Drop zeigt OmniConverter nur die
 Zielformate, die für diese Datei sinnvoll sind, und nur die Optionen, die für die gewählte
-Umwandlung gelten. Ohne Speicherort landet das Ergebnis neben dem Original, mit neuer
-Endung. Vorhandene Dateien werden nie überschrieben (`Urlaub (1).mp4`).
+Umwandlung gelten. Eine **Live-Vorschau** daneben zeigt das Ergebnis, bevor es gespeichert
+wird. Ohne Speicherort landet das Ergebnis neben dem Original, mit neuer Endung. Vorhandene
+Dateien werden nie überschrieben (`Urlaub (1).mp4`).
 
 ## Was geht?
 
@@ -25,7 +31,7 @@ Endung. Vorhandene Dateien werden nie überschrieben (`Urlaub (1).mp4`).
 | **GIF-Export** | gif | Schneiden, FPS, Breite, Farbanzahl, Dithering, Wiederholung (optimierte Palette) |
 | **Animiertes GIF** | **webm**, mp4, mkv, mov, avi | **Transparenz bleibt in WebM erhalten** (VP9 mit Alphakanal), Schneiden, Auflösung, Qualität, FPS |
 | **Audio**: mp3, wav, flac, ogg, opus, m4a, aac, aiff, wma | mp3, wav, flac, ogg, opus, m4a, aiff | **Lautheit normalisieren (EBU R128, zwei Durchläufe)**, Bitrate, Abtastrate, Mono/Stereo, Ein-/Ausblenden, Schneiden, Cover bleibt erhalten |
-| **Bild**: png, jpg, webp, avif, heic, bmp, tiff, gif, ico, tga | png, jpg, webp, avif, heic, bmp, tiff, gif, ico, **pdf** | Größe ändern, Qualität, verlustfrei, EXIF/GPS entfernen, Drehung laut EXIF, Hintergrund für Transparenz, Animationen bleiben erhalten |
+| **Bild**: png, jpg, webp, avif, heic, bmp, tiff, gif, ico, tga | png, jpg, webp, avif, heic, bmp, tiff, gif, ico, **pdf** | Größe ändern, Qualität, verlustfrei, **PNG mit weniger Farben** (256 … 2, mit Dithering, deutlich kleiner), EXIF/GPS entfernen, Drehung laut EXIF, Hintergrund für Transparenz, Animationen bleiben erhalten |
 | **Textur**: jedes Bild oben | **Normal-Map**, **Specular-Map** (PNG, z. B. `stein_normal.png`) | Stärke, Glättung, Höhe umkehren, OpenGL/DirectX, nahtlos kachelbar; Specular mit Helligkeit/Kontrast, umgekehrt als Roughness-Map |
 | **3D-Modell**: obj, glb, gltf, fbx, stl, ply | obj, glb, gltf, fbx, stl, ply | Skalierung (cm/m/mm/Zoll), Oben-Achse Y↔Z, OBJ mit `.mtl` und Texturen, glTF als eine Datei; FBX über Blender (Animationen bleiben bei FBX ↔ GLB erhalten) |
 | **QR-Code**: Link oder Text (eintippen, einfügen oder reinziehen), txt, md, vCard (vcf), Verknüpfungen (url, webloc) | PNG, SVG | Fehlerkorrektur, Größe, Farben, transparenter Hintergrund. Aus Dateien wird der Inhalt kodiert (bis ca. 2,9 KB), aus Verknüpfungen die Adresse |
@@ -61,6 +67,8 @@ Die Ergebnisse landen im Bilder-Ordner, z. B. als `qr-code.png` oder `noise-42.p
   Programmpfade.
 * Ergebnisse werden atomar geschrieben: Bei Fehler oder Abbruch bleibt keine halbe Datei
   liegen.
+* Die Vorschau entsteht in einem temporären Ordner, der sofort nach dem Einlesen wieder
+  gelöscht wird.
 
 ## Installation
 
@@ -121,7 +129,21 @@ Danach gibt es die Befehle `omniconverter` (Oberfläche) und `omniconvert` (Komm
 3. Zielformat anklicken. Optionen sind optional, die Voreinstellungen passen.
 4. Optional „Ändern …“ für einen anderen Speicherort, dann **Umwandeln**.
 
-Während der Umwandlung kocht eine Eule, danach freut sich eine Eule mit Brille.
+Während der Umwandlung kocht eine Eule, danach freut sich eine Eule mit Brille. Mit
+„← Zurück zu den Optionen“ geht es danach mit derselben Datei weiter, etwa um ein anderes
+Format oder andere Einstellungen auszuprobieren, ohne sie neu zu öffnen.
+
+**Vorschau:** Bei Bildern, Textur- und Noise-Maps, QR-Codes und Videos erscheint rechts neben
+den Optionen eine Vorschau, die jeder Änderung folgt:
+
+* **Bilder** zeigen das echte Ergebnis mit genauer Dateigröße, also auch JPEG-Artefakte oder
+  die reduzierte PNG-Palette. „Original“ schaltet zum Vergleich auf die Quelle um, „1:1“ (oder
+  ein Doppelklick) zeigt die Originalgröße, verschieben per Ziehen.
+* **Videos** zeigen stumm den gewählten Ausschnitt (z. B. nur Sekunde 1–3), mit Play/Pause und
+  Schieberegler. Bis 10 s läuft er in Echtzeit, längere Ausschnitte als Zeitraffer mit dem
+  exakten ersten und letzten Bild. Beim GIF-Export ist die Vorschau das echte GIF mit Farben,
+  Dithering und Bildrate, die Dateigröße wird hochgerechnet.
+* Audio, Dokumente, Tabellen, Daten und 3D-Modelle haben keine Vorschau.
 
 ### Kontextmenü
 
@@ -145,6 +167,7 @@ omniconvert video.mov --to mp4
 omniconvert clip.mp4 --to gif -s start=0:05 -s end=0:12 -s width=640 -s colors=128
 omniconvert podcast.wav --to mp3 -s normalize=podcast -s bitrate=128
 omniconvert foto.heic --to jpg -s resize=fit -s max_width=1920 -s max_height=1080
+omniconvert screenshot.png --to png -s colors=64    # Palette: deutlich kleineres PNG
 omniconvert bericht.md --to pdf
 omniconvert *.png --to webp -o ./webp/          # mehrere Dateien → Ordner
 omniconvert *.mp3 *.wav *.flac --to opus         # gemischte Formate in ein Ziel
@@ -168,7 +191,7 @@ Zeiten gehen als `90`, `1:30` oder `0:01:30.5`. Wichtige Optionen:
 | Video → Video | `start`, `end`, `resolution` (original, 2160, 1440, 1080, 720, 480, 360, custom) + `width`, `quality` (high, medium, small), `fps`, `fast` (umpacken ohne Neukodierung), `remove_audio`, `normalize`, `strip_metadata` |
 | → GIF | `start`, `end`, `fps`, `width`, `colors` (2–256), `dither` (sierra2_4a, floyd_steinberg, bayer, none), `loop` (forever, once) |
 | → Audio | `start`, `end`, `bitrate`, `normalize` (off, streaming = −14 LUFS, podcast = −16, broadcast = −23), `sample_rate`, `channels` (mono, stereo), `fade_in`, `fade_out`, `flac_level`, `strip_metadata` |
-| Bild | `resize` (original, percent, fit) + `percent` / `max_width` / `max_height`, `quality`, `lossless`, `background`, `strip_metadata` |
+| Bild | `resize` (original, percent, fit) + `percent` / `max_width` / `max_height`, `quality`, `lossless`, `colors` (all, 256, 128, 64, 32, 16, 8, 4, 2; nur PNG) + `dither` (floyd_steinberg, none), `background`, `strip_metadata` |
 | Daten/Tabellen | `delimiter` (comma, semicolon, tab), `excel_bom`, `sheet`, `indent`, `detect_numbers` |
 | Pandoc | `allow_resources` (lokale Bilder einbinden, Netzwerk bleibt blockiert) |
 | GIF → Video | `start`, `end`, `resolution` + `width`, `quality`, `fps`, `keep_transparency` (nur WebM) |
@@ -195,8 +218,9 @@ src/omniconverter/
   core/          Qt-freier Kern: Formate, Options-Schema, Registry, Converter, Tools
   backends/      ffmpeg.py (+ ffmpeg_args.py), image.py, document.py, data.py,
                  texture.py (Normal-/Specular-Maps), noise.py, qr.py,
-                 model3d.py (trimesh + Blender für FBX)
-  gui/           PySide6-Oberfläche (Seiten, dynamisches Options-Formular, Worker)
+                 model3d.py (trimesh + Blender für FBX), preview.py (Vorschaubilder)
+  gui/           PySide6-Oberfläche (Seiten, dynamisches Options-Formular, Vorschau,
+                 Worker)
   integration/   Kontextmenü für Windows (Registry) und Linux (Desktop-Dateien)
   resources/     Icons und die Eulen-Emotes (emotes/, CC BY 4.0)
   cli.py         omniconvert

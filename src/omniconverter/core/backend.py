@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
-from omniconverter.core.errors import Cancelled
+from omniconverter.core.errors import Cancelled, UnsupportedConversion
 from omniconverter.core.formats import Format
 from omniconverter.core.options import Option
 from omniconverter.core.probe import MediaInfo
@@ -36,6 +36,22 @@ class ConversionRequest:
     options: dict[str, Any] = field(default_factory=dict)
     media: MediaInfo | None = None
     text: str | None = None  # content of a text source
+
+
+@dataclass
+class Preview:
+    """A quick look at a conversion's result: images to show, and facts about the result."""
+
+    frames: list[Path]  # images Qt can show (PNG/JPEG); one for a still image
+    durations_ms: list[int] = field(default_factory=list)  # per frame; empty for a still
+    timestamps: list[float] = field(default_factory=list)  # video: seconds in the source
+    span: tuple[float, float] | None = None  # video: the part of the source shown
+    original: Path | None = None  # the source, prepared the same way, to compare with
+    width: int | None = None  # size of the real result
+    height: int | None = None
+    size_bytes: int | None = None  # file size of the real result, if known
+    estimated: bool = False  # size_bytes is extrapolated, e.g. from a shortened GIF
+    note: str = ""
 
 
 class ConversionContext:
@@ -93,3 +109,12 @@ class Backend(ABC):
     @abstractmethod
     def convert(self, request: ConversionRequest, output: Path, ctx: ConversionContext) -> None:
         """Convert ``request.source`` and write the result to *output*."""
+
+    def can_preview(self, source: Format, target: Format) -> bool:
+        """Whether :meth:`preview` works for the pair."""
+        return False
+
+    def preview(self, request: ConversionRequest, ctx: ConversionContext) -> Preview:
+        """Render a quick look at the result into ``ctx.work_dir``."""
+        raise UnsupportedConversion(
+            f"{request.source_format.label} → {request.target_format.label}")

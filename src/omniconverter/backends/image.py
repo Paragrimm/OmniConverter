@@ -6,7 +6,14 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from omniconverter.core.backend import Backend, Conversion, ConversionContext, ConversionRequest
+from omniconverter.backends.preview import image_frames, original_image, save_image
+from omniconverter.core.backend import (
+    Backend,
+    Conversion,
+    ConversionContext,
+    ConversionRequest,
+    Preview,
+)
 from omniconverter.core.errors import ConversionError
 from omniconverter.core.formats import Format
 from omniconverter.core.options import Kind, Option, when
@@ -24,6 +31,8 @@ _QUALITY_DEFAULT = {"jpg": 90, "webp": 85, "avif": 70, "heic": 80}
 _NO_ALPHA = {"jpg", "bmp", "pdf"}
 _ANIMATED = {"gif", "webp", "png"}
 _ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
+PALETTE_SIZES = (256, 128, 64, 32, 16, 8, 4, 2)  # "colors" for PNG; "all" keeps true color
+_OPTIMIZE_PIXELS = 4_000_000  # smallest PNG encoding is slow for huge images
 
 _heif_registered = False
 
@@ -70,6 +79,17 @@ class ImageBackend(Backend):
                 maximum=100, suffix=" %",
                 visible_if=when("lossless", False) if target.id in ("webp", "avif") else (),
             ))
+        if target.id == "png":
+            opts += [
+                Option("colors", t("opt.colors"), Kind.CHOICE, "all",
+                       choices=(("all", t("opt.colors.all")),
+                                *((n, str(n)) for n in PALETTE_SIZES)),
+                       help=t("opt.colors_help")),
+                Option("dither", t("opt.dither"), Kind.CHOICE, "floyd_steinberg", advanced=True,
+                       choices=tuple((d, t(f"opt.dither.{d}"))
+                                     for d in ("floyd_steinberg", "none")),
+                       visible_if=when("colors", *PALETTE_SIZES), help=t("opt.png_dither_help")),
+            ]
         if target.id in _NO_ALPHA:
             opts.append(Option("background", t("opt.background"), Kind.COLOR, "#ffffff",
                                advanced=True))
@@ -79,6 +99,38 @@ class ImageBackend(Backend):
         return opts
 
     def convert(self, request: ConversionRequest, output: Path, ctx: ConversionContext) -> None:
+        frames, save = self._render(request, ctx)
+        _save(frames, save, request.target_format.id, output)
+
+    def can_preview(self, source: Format, target: Format) -> bool:
+        return True
+
+    def preview(self, request: ConversionRequest, ctx: ConversionContext) -> Preview:
+        """The real result (exact file size), decoded again to show artifacts and palettes."""
+        assert request.source is not None
+        target = request.target_format.id
+        frames, save = self._render(request, ctx)
+        result = ctx.work_dir / f"result.{request.target_format.extension}"
+        _save(frames, save, target, result)
+        ctx.check_cancelled()
+        note = ""
+        if target == "pdf":  # Pillow cannot read PDFs: show the pages as they went in
+            shown = [save_image(frames[0], ctx.work_dir / "frame-0000.png")]
+            durations: list[int] = []
+            width, height = frames[0].size
+            if len(frames) > 1:
+                note = t("preview.pages", n=len(frames))
+        else:
+            shown, durations, (width, height) = image_frames(result, ctx,
+                                                             animated=target in _ANIMATED)
+        opts = request.options
+        original = original_image(request.source, ctx, lambda im: _resize(im, opts))
+        return Preview(shown, durations, original=original, width=width, height=height,
+                       size_bytes=result.stat().st_size, note=note)
+
+    def _render(self, request: ConversionRequest, ctx: ConversionContext
+                ) -> tuple[list[Any], dict[str, Any]]:
+        """The frames to save and the arguments for Pillow's ``save``."""
         from PIL import Image, ImageSequence, UnidentifiedImageError
 
         register_heif()
@@ -97,10 +149,16 @@ class ImageBackend(Backend):
                 frames, durations = [], []
                 for frame in source_frames:
                     ctx.check_cancelled()
-                    durations.append(frame.info.get("duration", info.get("duration", 100)))
                     frames.append(_prepare(frame.copy(), target, opts))
+                    # Only a loaded frame knows its duration (e.g. the first one of a WebP).
+                    durations.append(frame.info.get("duration", info.get("duration", 100)))
         except (UnidentifiedImageError, OSError, ValueError) as exc:
             raise ConversionError(t("error.image_failed"), str(exc)) from exc
+        colors = opts.get("colors", "all")
+        if target == "png" and colors != "all" and len(frames) == 1:
+            # Animated PNGs share one palette for all frames, so only still images are reduced.
+            frames[0] = reduce_colors(frames[0], int(colors),
+                                      opts.get("dither", "floyd_steinberg") != "none")
 
         save: dict[str, Any] = {}
         if "icc_profile" in info and target not in ("gif", "ico", "bmp"):
@@ -116,6 +174,9 @@ class ImageBackend(Backend):
             save.pop("quality", None)
         if target == "jpg":
             save.update(optimize=True, progressive=True)
+        elif target == "png":
+            width, height = frames[0].size
+            save["optimize"] = width * height < _OPTIMIZE_PIXELS
         elif target == "tiff":
             save["compression"] = "tiff_lzw"
         elif target == "ico":
@@ -130,10 +191,14 @@ class ImageBackend(Backend):
                 save.update(duration=durations, loop=info.get("loop", 0))
                 if target == "gif":
                     save["disposal"] = 2
-        try:
-            frames[0].save(output, format=_PIL_FORMAT[target], **save)
-        except (OSError, ValueError, KeyError) as exc:
-            raise ConversionError(t("error.image_failed"), str(exc)) from exc
+        return frames, save
+
+
+def _save(frames: list[Any], save: dict[str, Any], target: str, output: Path) -> None:
+    try:
+        frames[0].save(output, format=_PIL_FORMAT[target], **save)
+    except (OSError, ValueError, KeyError) as exc:
+        raise ConversionError(t("error.image_failed"), str(exc)) from exc
 
 
 def _prepare(im: Any, target: str, opts: dict[str, Any]) -> Any:
@@ -163,6 +228,22 @@ def _prepare(im: Any, target: str, opts: dict[str, Any]) -> Any:
     if target == "gif" and im.mode in ("P", "L"):
         return im
     return im.convert("RGBA" if has_alpha else "RGB")
+
+
+def reduce_colors(im: Any, colors: int, dither: bool) -> Any:
+    """A palette image with at most *colors* colors (like pngquant, if a little simpler)."""
+    from PIL import Image
+
+    has_alpha = im.mode in ("RGBA", "LA", "PA") or (
+        im.mode == "P" and "transparency" in im.info
+    )
+    if has_alpha:  # Pillow can only dither to a palette without alpha
+        return im.convert("RGBA").quantize(colors, method=Image.Quantize.FASTOCTREE)
+    rgb = im.convert("RGB")
+    palette = rgb.quantize(colors, method=Image.Quantize.MEDIANCUT)
+    if not dither:
+        return palette
+    return rgb.quantize(palette=palette, dither=Image.Dither.FLOYDSTEINBERG)
 
 
 def _resize(im: Any, opts: dict[str, Any]) -> Any:

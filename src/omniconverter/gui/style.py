@@ -65,4 +65,18 @@ QLineEdit[invalid="true"] { border: 1px solid #d0453a; }
 QPlainTextEdit#QRText { font-family: monospace; }
 QPlainTextEdit#Details { font-family: monospace; font-size: 11px; }
 QFrame#Separator { color: palette(midlight); }
+
+QFrame#PreviewCanvas {
+    border: 1px solid palette(midlight);
+    border-radius: 8px;
+    background: palette(base);
+}
+QToolButton#PreviewToggle { padding: 2px 8px; border: 1px solid palette(mid); border-radius: 6px; }
+QToolButton#PreviewToggle:checked {
+    background: palette(highlight);
+    color: palette(highlighted-text);
+    border-color: palette(highlight);
+}
+QLabel#PreviewInfo { color: palette(placeholder-text); }
+QLabel#PreviewInfo[error="true"] { color: #d0453a; }
 """

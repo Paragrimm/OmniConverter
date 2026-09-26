@@ -86,6 +86,15 @@ def test_animated_gif_to_webp_keeps_frames(converter, tmp_path):
         assert getattr(im, "n_frames", 1) == 1
 
 
+def test_animated_webp_keeps_the_first_frames_duration(converter, tmp_path):
+    src = tmp_path / "anim.webp"
+    frames = [Image.new("RGB", (40, 30), c) for c in ("red", "green", "blue")]
+    frames[0].save(src, save_all=True, append_images=frames[1:], duration=250, loop=0)
+    out = convert(converter, src, "gif", tmp_path)
+    with Image.open(out) as im:
+        assert im.info["duration"] == 250  # Pillow only knows it once the frame is loaded
+
+
 @pytest.mark.parametrize("target", ["avif", "heic", "tiff", "bmp", "gif", "pdf"])
 def test_other_targets(converter, transparent_png, tmp_path, target):
     out = convert(converter, transparent_png, target, tmp_path)
@@ -113,3 +122,67 @@ def test_broken_image_gives_friendly_error(converter, tmp_path):
     src.write_bytes(b"not a png")
     with pytest.raises(ConversionError):
         convert(converter, src, "jpg", tmp_path)
+
+
+@pytest.fixture
+def gradient_png(tmp_path):
+    """Photo-like colors: thousands of them, which a palette has to approximate."""
+    import numpy as np
+
+    x = np.linspace(0, 255, 200)
+    rg = np.stack(np.meshgrid(x, x[::-1]), axis=-1)
+    rgb = np.concatenate([rg, rg.mean(axis=-1, keepdims=True)], axis=-1)
+    grain = np.random.default_rng(7).normal(0, 12, rgb.shape)
+    rgb = np.clip(rgb + grain, 0, 255).astype(np.uint8)
+    path = tmp_path / "gradient.png"
+    Image.fromarray(rgb, "RGB").save(path)
+    return path
+
+
+@pytest.mark.parametrize("dither", ["floyd_steinberg", "none"])
+def test_png_colors_make_a_small_palette_image(converter, gradient_png, tmp_path, dither):
+    full = convert(converter, gradient_png, "png", tmp_path, name="full")
+    few = convert(converter, gradient_png, "png", tmp_path, name="few", colors=16, dither=dither)
+    with Image.open(few) as im:
+        assert im.mode == "P" and im.size == (200, 200)
+        assert len(im.convert("RGB").getcolors(256)) <= 16
+    assert few.stat().st_size < full.stat().st_size / 2
+    with Image.open(full) as im:
+        assert im.mode == "RGB"  # "all" (the default) stays lossless true color
+
+
+def test_png_colors_keep_transparency(converter, tmp_path):
+    import numpy as np
+
+    rgba = np.zeros((40, 80, 4), dtype=np.uint8)
+    rgba[..., 0] = np.linspace(0, 255, 80)
+    rgba[:, 40:, 3] = 255  # left half transparent, right half opaque
+    src = tmp_path / "half.png"
+    Image.fromarray(rgba, "RGBA").save(src)
+    out = convert(converter, src, "png", tmp_path, colors=8)
+    with Image.open(out) as im:
+        assert im.mode == "P" and "transparency" in im.info
+        alpha = np.asarray(im.convert("RGBA"))[..., 3]
+    assert alpha[:, :40].max() == 0 and alpha[:, 40:].min() == 255
+
+
+def test_png_colors_keep_images_with_few_colors_exact(converter, tmp_path):
+    src = tmp_path / "flags.png"
+    im = Image.new("RGB", (30, 20), "red")
+    im.paste((0, 128, 0), (10, 0, 20, 20))
+    im.paste((0, 0, 255), (20, 0, 30, 20))
+    im.save(src)
+    out = convert(converter, src, "png", tmp_path, colors=4)
+    with Image.open(out) as result:
+        colors = {c for _n, c in result.convert("RGB").getcolors()}
+    assert colors == {(255, 0, 0), (0, 128, 0), (0, 0, 255)}
+
+
+def test_colors_option_only_for_png(converter, gradient_png):
+    source = converter.inspect(gradient_png)
+    keys = {o.key for o in converter.options(source, get_format("png"))}
+    assert {"colors", "dither"} <= keys
+    for target in ("jpg", "webp", "gif"):
+        assert "colors" not in {o.key for o in converter.options(source, get_format(target))}
+    values = converter.resolve_options(source, get_format("png"), {"colors": "64"})
+    assert values["colors"] == 64  # as typed on the command line: -s colors=64

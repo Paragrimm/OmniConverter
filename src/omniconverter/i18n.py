@@ -137,6 +137,19 @@ MESSAGES: dict[str, tuple[str, str]] = {
     # --- gif ---
     "opt.colors": ("Farben", "Colors"),
     "opt.dither": ("Dithering", "Dithering"),
+    "opt.colors.all": ("Alle (verlustfrei)", "All (lossless)"),
+    "opt.colors_help": (
+        "Weniger Farben machen PNGs deutlich kleiner (Palettenbild). Für Fotos reichen oft "
+        "256, für Logos und Screenshots 64 oder weniger. Animierte PNGs behalten alle Farben.",
+        "Fewer colors make PNGs much smaller (palette image). Photos often look fine with 256, "
+        "logos and screenshots with 64 or fewer. Animated PNGs keep all colors.",
+    ),
+    "opt.png_dither_help": (
+        "Mischt Farbpunkte gegen sichtbare Farbstufen, die Datei wird etwas größer. Wirkt nur "
+        "bei Bildern ohne Transparenz.",
+        "Mixes dots of color against visible banding; the file gets a little larger. Only for "
+        "images without transparency.",
+    ),
     "opt.dither.none": ("Keins (flächig)", "None (flat)"),
     "opt.dither.bayer": ("Bayer (klein)", "Bayer (small)"),
     "opt.dither.floyd_steinberg": ("Floyd-Steinberg (weich)", "Floyd–Steinberg (smooth)"),
@@ -317,6 +330,15 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "gui.drop.title": ("Datei hierher ziehen", "Drop a file here"),
     "gui.drop.hint": ("oder klicken, um Dateien auszuwählen", "or click to choose files"),
     "gui.drop.dialog": ("Dateien zum Umwandeln auswählen", "Choose files to convert"),
+    # --- preview ---
+    "preview.scaled": ("Vorschau verkleinert", "Scaled-down preview"),
+    "preview.pages": ("{n} Seiten", "{n} pages"),
+    "preview.timelapse": ("Zeitraffer", "Time-lapse"),
+    "preview.first_seconds": ("Vorschau der ersten {s} s", "Preview of the first {s} s"),
+    "preview.fast_cut": (
+        "Schnell-Modus: Der Schnitt landet auf dem nächsten Schlüsselbild.",
+        "Fast mode: the cut snaps to the nearest keyframe.",
+    ),
     "gui.drop.supported": ("Unterstützte Dateien", "Supported files"),
     "gui.drop.all_files": ("Alle Dateien", "All files"),
     "gui.qr_placeholder": (
@@ -365,8 +387,22 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "gui.show_details": ("Details anzeigen", "Show details"),
     "gui.open": ("Öffnen", "Open"),
     "gui.show_in_folder": ("Im Ordner anzeigen", "Show in folder"),
-    "gui.back_to_options": ("Zurück zu den Optionen", "Back to options"),
+    "gui.back_to_options": ("← Zurück zu den Optionen", "← Back to options"),
     "gui.new_file": ("Weitere Datei", "Another file"),
+    "gui.preview": ("Vorschau", "Preview"),
+    "gui.preview_busy": ("Vorschau wird berechnet …", "Rendering preview …"),
+    "gui.preview_invalid": (
+        "Die Vorschau wartet auf gültige Eingaben.",
+        "The preview waits for valid input.",
+    ),
+    "gui.preview_result": ("Ergebnis", "Result"),
+    "gui.preview_original": ("Original", "Original"),
+    "gui.preview_actual_size": (
+        "Originalgröße, zum Verschieben ziehen (auch per Doppelklick)",
+        "Actual size, drag to move (also by double-click)",
+    ),
+    "gui.preview_play": ("Abspielen", "Play"),
+    "gui.preview_pause": ("Anhalten", "Pause"),
     "gui.settings.title": ("Einstellungen", "Settings"),
     "gui.settings.language": ("Sprache", "Language"),
     "gui.settings.language_auto": ("Systemsprache", "System language"),

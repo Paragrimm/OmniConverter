@@ -8,8 +8,15 @@ from pathlib import Path
 from typing import Any
 
 from omniconverter.backends import ffmpeg_args as fa
+from omniconverter.backends.preview import image_frames
 from omniconverter.core import process
-from omniconverter.core.backend import Backend, Conversion, ConversionContext, ConversionRequest
+from omniconverter.core.backend import (
+    Backend,
+    Conversion,
+    ConversionContext,
+    ConversionRequest,
+    Preview,
+)
 from omniconverter.core.errors import Cancelled, ConversionError
 from omniconverter.core.formats import Format
 from omniconverter.core.options import Kind, Option, when
@@ -266,6 +273,82 @@ class FFmpegVideoBackend(_FFmpegBase):
         if opts.get("fast"):
             attempts.append(encode({**opts, "fast": False}))
         self._with_fallback(attempts)
+
+    # -- preview ----------------------------------------------------------------------------
+
+    def can_preview(self, source: Format, target: Format) -> bool:
+        return target.id not in fa.AUDIO_TARGETS
+
+    def preview(self, request: ConversionRequest, ctx: ConversionContext) -> Preview:
+        ffmpeg = ctx.locator.require("ffmpeg")
+        if request.target_format.id == "gif":
+            return self._gif_preview(ffmpeg, request, ctx)
+        return self._video_preview(ffmpeg, request, ctx)
+
+    def _video_preview(self, ffmpeg: str, request: ConversionRequest,
+                       ctx: ConversionContext) -> Preview:
+        """Silent frames of the chosen part: in real time, or as a time-lapse if it is long."""
+        opts, media, src = request.options, request.media, str(request.source)
+        plan = fa.preview_plan(opts, media)
+        width = fa.preview_width(media)
+        alpha = (request.source_format.id == "gif" and bool(opts.get("keep_transparency"))
+                 and request.target_format.id in fa.ALPHA_TARGETS)
+        ext = "png" if alpha else "jpg"
+        pattern = str(ctx.work_dir / f"frame-%04d.{ext}")
+        self._run(fa.build_preview_frames(ffmpeg, src, pattern, plan, width, alpha=alpha),
+                  ctx, plan.duration)
+        frames = sorted(ctx.work_dir.glob(f"frame-*.{ext}"))
+        timestamps = [plan.start + i / plan.fps for i in range(len(frames))]
+        if plan.timelapse:  # keyframes only in between: the exact first and last frame too
+            first, last = ctx.work_dir / f"first.{ext}", ctx.work_dir / f"last.{ext}"
+            for path, is_last in ((first, False), (last, True)):
+                self._run(fa.build_edge_frame(ffmpeg, src, str(path), plan, width, last=is_last,
+                                              alpha=alpha), ctx, None)
+            if first.is_file() and last.is_file():
+                last_at = plan.end - 1 / (media.fps if media and media.fps else 25)
+                frames = [first, *frames[1:], last]  # the exact first replaces a keyframe
+                timestamps = [plan.start, *timestamps[1:], max(plan.start, last_at)]
+        if not frames:
+            raise ConversionError(t("error.no_output"))
+        notes = []
+        if plan.timelapse:
+            notes.append(t("preview.timelapse"))
+        if not plan.end_known:
+            notes.append(t("preview.first_seconds", s=f"{fa.PREVIEW_REALTIME_S:g}"))
+        if opts.get("fast") and plan.start > 0:
+            notes.append(t("preview.fast_cut"))
+        size = fa.video_output_size(opts, media)
+        return Preview(frames, [plan.frame_ms] * len(frames), timestamps,
+                       span=(plan.start, plan.end), width=size[0] if size else None,
+                       height=size[1] if size else None, note=" · ".join(notes))
+
+    def _gif_preview(self, ffmpeg: str, request: ConversionRequest,
+                     ctx: ConversionContext) -> Preview:
+        """The real GIF with all options (colors, dithering, …), at most a few seconds long."""
+        opts, media = dict(request.options), request.media
+        start = opts.get("start") or 0.0
+        full = _duration(request)  # also checks the cut
+        shortened = full is None or full > fa.GIF_PREVIEW_S
+        if shortened:
+            opts["end"] = start + fa.GIF_PREVIEW_S
+        shown = fa.GIF_PREVIEW_S if shortened else full
+        result = ctx.work_dir / "result.gif"
+        self._run(fa.build_gif(ffmpeg, str(request.source), str(result), opts, media),
+                  ctx, shown)
+        frames, durations, (width, height) = image_frames(result, ctx)
+        timestamps, at = [], start
+        for duration in durations or [0]:
+            timestamps.append(at)
+            at += duration / 1000
+        size: int | None = result.stat().st_size
+        note = ""
+        if shortened and full is not None and shown:
+            size = round(size * full / shown)  # GIF size grows about linearly with the length
+        elif shortened:
+            size, note = None, t("preview.first_seconds", s=f"{fa.GIF_PREVIEW_S:g}")
+        return Preview(frames, durations, timestamps if durations else [],
+                       span=(start, start + (shown or 0)), width=width, height=height,
+                       size_bytes=size, estimated=shortened and size is not None, note=note)
 
 
 class FFmpegAudioBackend(_FFmpegBase):

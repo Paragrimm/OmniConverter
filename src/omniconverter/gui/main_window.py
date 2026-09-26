@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSplitter,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -30,12 +31,13 @@ from PySide6.QtWidgets import (
 
 from omniconverter import APP_NAME
 from omniconverter.config import Settings
-from omniconverter.core.converter import Converter, SourceFile
+from omniconverter.core.converter import Converter, SourceFile, unique_path
 from omniconverter.core.errors import ConversionError
 from omniconverter.core.formats import CATEGORY_ORDER, Category, Format
 from omniconverter.core.registry import TargetChoice
 from omniconverter.core.tools import TOOLS, install_hint
 from omniconverter.gui.options_form import OptionsForm
+from omniconverter.gui.preview import PreviewPanel
 from omniconverter.gui.settings_dialog import SettingsDialog
 from omniconverter.gui.widgets import (
     DropArea,
@@ -57,6 +59,7 @@ from omniconverter.i18n import t
 from omniconverter.integration import supported_source_formats
 
 MERGE_WINDOW_S = 3.0  # files arriving this soon after the last ones are added to them
+PREVIEW_WINDOW_WIDTH = 1060  # the window grows to this once, when the preview first appears
 
 
 def file_filter() -> str:
@@ -177,7 +180,16 @@ class ConfigPage(QWidget):
         self.body_layout.setContentsMargins(0, 0, 6, 0)
         self.body_layout.setSpacing(10)
         scroll.setWidget(self.body)
-        outer.addWidget(scroll, 1)
+        self.preview = PreviewPanel(window.converter)
+        self.preview.hide()  # only for targets with a preview
+        self._preview_sized = False
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.addWidget(scroll)
+        self.splitter.addWidget(self.preview)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 1)
+        outer.addWidget(self.splitter, 1)
 
         self.targets_box = QWidget()
         self.targets_layout = QVBoxLayout(self.targets_box)
@@ -199,6 +211,12 @@ class ConfigPage(QWidget):
         self.body_layout.addStretch(1)
 
         outer.addWidget(hline())
+        self.note = QLabel()  # e.g. skipped files or "cancelled"; only shown with a message
+        self.note.setObjectName("Muted")
+        self.note.setWordWrap(True)
+        self.note.hide()
+        outer.addWidget(self.note)
+
         out_row = QHBoxLayout()
         out_caption = QLabel(t("gui.save_to"))
         out_caption.setObjectName("Muted")
@@ -208,22 +226,15 @@ class ConfigPage(QWidget):
         self.output_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.change_output = QPushButton(t("gui.change"))
         self.change_output.clicked.connect(self._choose_output)
-        out_row.addWidget(out_caption)
-        out_row.addWidget(self.output_label, 1)
-        out_row.addWidget(self.change_output)
-        outer.addLayout(out_row)
-
-        actions = QHBoxLayout()
-        self.note = QLabel()
-        self.note.setObjectName("Muted")
-        self.note.setWordWrap(True)
-        actions.addWidget(self.note, 1)
         self.convert_button = QPushButton(t("gui.convert"))
         self.convert_button.setObjectName("Primary")
         self.convert_button.setDefault(True)
         self.convert_button.clicked.connect(window.start_conversion)
-        actions.addWidget(self.convert_button)
-        outer.addLayout(actions)
+        out_row.addWidget(out_caption)
+        out_row.addWidget(self.output_label, 1)
+        out_row.addWidget(self.change_output)
+        out_row.addWidget(self.convert_button)
+        outer.addLayout(out_row)
 
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
@@ -236,7 +247,8 @@ class ConfigPage(QWidget):
         self.sources = sources
         self.target = None
         self.custom_output = None
-        self.note.setText(note)
+        self.set_note(note)
+        self.preview.clear()
         self._fill_header()
         self._fill_targets(choices)
         self._set_form(None)
@@ -246,6 +258,12 @@ class ConfigPage(QWidget):
                     button.setChecked(True)
                     self._select(button.property("format"))
         self._update_output()
+        if self.target is None:
+            self.preview.hide()
+
+    def set_note(self, text: str) -> None:
+        self.note.setText(text)
+        self.note.setVisible(bool(text))
 
     def _fill_header(self) -> None:
         is_text = len(self.sources) == 1 and self.sources[0].format.id == "text"
@@ -286,6 +304,7 @@ class ConfigPage(QWidget):
             self.subtitle.setText(t("gui.qr_bytes", n=self.sources[0].size))
             self._update_convert_button()
             self._update_output()
+            self._update_preview()
 
     def _fill_targets(self, choices: list[TargetChoice]) -> None:
         for button in self.group.buttons():
@@ -341,10 +360,11 @@ class ConfigPage(QWidget):
         try:
             options = self.window_.converter.options(self.sources[0], fmt)
         except ConversionError as exc:
-            self.note.setText(exc.message)
+            self.set_note(exc.message)
             options = []
         self._set_form(OptionsForm(options, self.sources[0].media))
         self._update_output()
+        self._update_preview()
 
     def _set_form(self, form: OptionsForm | None) -> None:
         if self.form is not None:
@@ -356,6 +376,7 @@ class ConfigPage(QWidget):
         if form is not None:
             form.changed.connect(self._update_convert_button)
             form.changed.connect(self._update_output)  # e.g. the seed is part of the name
+            form.changed.connect(self._update_preview)
             self.options_holder.addWidget(form)
         self._update_convert_button()
 
@@ -367,6 +388,26 @@ class ConfigPage(QWidget):
 
     def _values(self) -> dict:
         return self.form.conversion_values() if self.form and self.form.is_valid() else {}
+
+    # -- preview ------------------------------------------------------------------------------
+
+    def _update_preview(self) -> None:
+        converter = self.window_.converter
+        if not self.sources or self.target is None or not converter.can_preview(
+                self.sources[0], self.target):
+            self.preview.clear()
+            self.preview.hide()
+            return
+        if self.preview.isHidden():
+            self.preview.show()
+            self.window_.make_room_for_preview()
+            if not self._preview_sized:  # later, keep what the user set
+                self._preview_sized = True
+                half = max(1, self.splitter.width() // 2)
+                self.splitter.setSizes([half, half])
+        values = None if self.form is not None and not self.form.is_valid() else self._values()
+        label = self.sources[0].name if len(self.sources) > 1 else ""
+        self.preview.request(self.sources[0], self.target, values, label)
 
     # -- output location --------------------------------------------------------------------
 
@@ -509,23 +550,23 @@ class ResultPage(QWidget):
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
+        # Back to the same file's options, e.g. to try another format or other settings.
+        self.again_button = QPushButton(t("gui.back_to_options"))
+        self.again_button.clicked.connect(window.back_to_config)
         self.open_button = QPushButton(t("gui.open"))
         self.open_button.clicked.connect(lambda: open_file(self.outputs[0]))
         self.folder_button = QPushButton(t("gui.show_in_folder"))
         self.folder_button.clicked.connect(lambda: show_in_folder(self.outputs[0]))
-        self.again_button = QPushButton(t("gui.back_to_options"))
-        self.again_button.clicked.connect(window.back_to_config)
         self.new_button = QPushButton(t("gui.new_file"))
         self.new_button.setObjectName("Primary")
         self.new_button.clicked.connect(window.reset)
-        for b in (self.open_button, self.folder_button, self.again_button, self.new_button):
+        for b in (self.again_button, self.open_button, self.folder_button, self.new_button):
             buttons.addWidget(b)
         buttons.addStretch(1)
         layout.addLayout(buttons)
         layout.addWidget(self.credit)
 
-    def show_result(self, outputs: list[Path], errors: list[tuple[str, str, str]],
-                    generated: bool = False) -> None:
+    def show_result(self, outputs: list[Path], errors: list[tuple[str, str, str]]) -> None:
         self.outputs = outputs
         owl = not errors and self.emote.is_valid()
         self.emote.setVisible(owl)
@@ -560,8 +601,6 @@ class ResultPage(QWidget):
         self.details_toggle.setVisible(bool(details.strip()))
         self.open_button.setVisible(len(outputs) == 1)
         self.folder_button.setVisible(bool(outputs))
-        # Generated results: quickly try another seed or text.
-        self.again_button.setVisible(bool(errors) or generated)
 
 
 # --------------------------------------------------------------------------------------------
@@ -576,6 +615,7 @@ class MainWindow(QMainWindow):
         self._last_open = 0.0
         self._outputs: list[Path] = []
         self._errors: list[tuple[str, str, str]] = []
+        self._grown_for_preview = False
 
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(app_icon())
@@ -604,11 +644,30 @@ class MainWindow(QMainWindow):
     def reset(self) -> None:
         if self.busy():
             return
+        self.config_page.preview.clear()
         self.drop_page.show_error("")
         self.stack.setCurrentWidget(self.drop_page)
 
+    def make_room_for_preview(self) -> None:
+        """Widen the window once for the preview column (never when maximized)."""
+        if self._grown_for_preview or self.isMaximized() or self.isFullScreen():
+            return
+        self._grown_for_preview = True
+        screen = self.screen()
+        width = PREVIEW_WINDOW_WIDTH
+        if screen is not None:
+            width = min(width, screen.availableGeometry().width() - 40)
+        if width > self.width():
+            self.resize(width, self.height())
+
     def back_to_config(self) -> None:
-        self.stack.setCurrentWidget(self.config_page)
+        page = self.config_page
+        if page.custom_output is not None and len(page.sources) == 1:
+            # The chosen file holds the last result now; a second run must not overwrite it.
+            page.custom_output = unique_path(page.custom_output)
+        page._update_output()
+        page.preview.resume()
+        self.stack.setCurrentWidget(page)
 
     def _escape(self) -> None:
         if self.stack.currentWidget() is self.progress_page:
@@ -624,7 +683,7 @@ class MainWindow(QMainWindow):
             try:
                 sources = [self.converter.inspect(s.path) for s in self.config_page.sources]
             except ConversionError as exc:  # e.g. the file was deleted meanwhile
-                self.config_page.note.setText(exc.message)
+                self.config_page.set_note(exc.message)
                 return
             self.config_page.load(sources, self.converter.targets(sources), keep_target=True)
 
@@ -726,6 +785,7 @@ class MainWindow(QMainWindow):
         if self.busy() or self.config_page.target is None:
             return
         jobs = self.config_page.jobs()
+        self.config_page.preview.stop()  # the conversion gets the computer's full attention
         self._outputs, self._errors = [], []
         worker = ConversionWorker(self.converter, jobs)
         worker.job_started.connect(lambda i: self._on_job_started(jobs, i))
@@ -734,7 +794,7 @@ class MainWindow(QMainWindow):
         worker.job_failed.connect(
             lambda i, msg, det: self._errors.append((jobs[i].source.name, msg, det))
         )
-        worker.finished.connect(lambda: self._on_worker_finished(jobs))
+        worker.finished.connect(self._on_worker_finished)
         self.worker = worker
         self.progress_page.cancel.setEnabled(True)
         self.stack.setCurrentWidget(self.progress_page)
@@ -756,20 +816,21 @@ class MainWindow(QMainWindow):
             self.progress_page.detail.setText(t("gui.cancelling"))
             self.worker.cancel()
 
-    def _on_worker_finished(self, jobs: list[Job]) -> None:
+    def _on_worker_finished(self) -> None:
         worker, self.worker = self.worker, None
         if worker is not None and worker.cancelled and not self._outputs:
-            self.config_page.note.setText(t("gui.cancelled"))
+            self.config_page.set_note(t("gui.cancelled"))
             self.stack.setCurrentWidget(self.config_page)
             self.config_page._update_output()
+            self.config_page.preview.resume()
             return
-        generated = any(job.source.path is None for job in jobs)
-        self.result_page.show_result(self._outputs, self._errors, generated)
+        self.result_page.show_result(self._outputs, self._errors)
         self.stack.setCurrentWidget(self.result_page)
         # Default output names may have been taken now – refresh for a second run.
         QTimer.singleShot(0, self.config_page._update_output)
 
     def closeEvent(self, event) -> None:
+        self.config_page.preview.shutdown()
         if self.worker is not None:
             self.worker.cancel()
             self.worker.wait(10_000)
