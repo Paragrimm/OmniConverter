@@ -392,6 +392,9 @@ def combine_order(sources: Sequence[SourceFile]) -> list[SourceFile]:
 
 def shared_stem(stems: Sequence[str]) -> str:
     """What all names begin with, without trailing numbers and separators (``scan_``…)."""
-    prefix = os.path.commonprefix(list(stems))
+    first, last = min(stems, default=""), max(stems, default="")
+    length = next((i for i, (a, b) in enumerate(zip(first, last, strict=False)) if a != b),
+                  min(len(first), len(last)))
+    prefix = first[:length]  # what the alphabetically first and last name share
     prefix = re.sub(r"[\s\d_\-.(#]+$", "", prefix)
     return prefix if len(prefix) >= 2 else ""
