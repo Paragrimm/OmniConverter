@@ -160,10 +160,61 @@ import bpy
 import mathutils
 
 src, dst, matrix = sys.argv[sys.argv.index("--") + 1:][:3]
+FORCE_DIRECT = len(sys.argv) > sys.argv.index("--") + 4  # tests: take the fallback paths
+
+
+def options_of(op):
+    return {p.identifier for p in op.get_rna_type().properties}
+
+
+def import_fbx(path):
+    # Blender 5 builds may lose options of the Python importer; the built-in one (4.5+) is
+    # the fallback.
+    native = "fbx_import" in dir(bpy.ops.wm)
+    try:
+        if FORCE_DIRECT and native:
+            raise TypeError("forced")
+        bpy.ops.import_scene.fbx(filepath=path)
+    except (TypeError, AttributeError, RuntimeError) as exc:
+        if not native:
+            raise
+        print("FBX: using Blender's built-in importer:", exc)
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        bpy.ops.wm.fbx_import(filepath=path)
+
+
+def export_fbx(path):
+    op = bpy.ops.export_scene.fbx
+    if not FORCE_DIRECT and {"path_mode", "embed_textures"} <= options_of(op):
+        op(filepath=path, path_mode="COPY", embed_textures=True)
+        return
+    # Some Blender 5 builds lose these options on the operator: call the exporter itself
+    # with the operator's defaults (Y up, -Z forward).
+    from bpy_extras.io_utils import axis_conversion
+    from io_scene_fbx import export_fbx_bin
+
+    class Report:
+        def report(self, kind, message):
+            print(*kind, message)
+
+    print("FBX: calling the exporter directly")
+    result = export_fbx_bin.save(
+        Report(), bpy.context, filepath=path, path_mode="COPY", embed_textures=True,
+        global_matrix=axis_conversion(to_forward="-Z", to_up="Y").to_4x4(),
+        axis_forward="-Z", axis_up="Y", mesh_smooth_type="OFF")
+    if result != {"FINISHED"}:
+        raise RuntimeError(f"FBX export failed: {result}")
+
+
+def export_glb(path):
+    op = bpy.ops.export_scene.gltf
+    extra = {"export_format": "GLB"} if "export_format" in options_of(op) else {}
+    op(filepath=path, **extra)
+
+
 bpy.ops.wm.read_factory_settings(use_empty=True)
-ext = src.rsplit(".", 1)[-1].lower()
-if ext == "fbx":
-    bpy.ops.import_scene.fbx(filepath=src)
+if src.rsplit(".", 1)[-1].lower() == "fbx":
+    import_fbx(src)
 else:
     bpy.ops.import_scene.gltf(filepath=src)
 if not bpy.context.scene.objects:
@@ -179,9 +230,9 @@ if matrix != "-":
             obj.parent = root
     root.matrix_world = m
 if dst.lower().endswith(".fbx"):
-    bpy.ops.export_scene.fbx(filepath=dst, path_mode="COPY", embed_textures=True)
+    export_fbx(dst)
 else:
-    bpy.ops.export_scene.gltf(filepath=dst, export_format="GLB")
+    export_glb(dst)
 """
 
 
@@ -189,6 +240,10 @@ def _matrix_arg(matrix: Any | None) -> str:
     if matrix is None:
         return "-"
     return ",".join(f"{v:.10g}" for v in matrix.flatten())
+
+
+# Tests set this to run the script's fallbacks for Blender builds that lose operator options.
+_FORCE_FALLBACK = False
 
 
 def run_blender(ctx: ConversionContext, source: Path, output: Path, matrix: Any | None) -> None:
@@ -200,7 +255,8 @@ def run_blender(ctx: ConversionContext, source: Path, output: Path, matrix: Any 
         env[var] = str(profile / sub)
     args = [blender, "--background", "--factory-startup", "-noaudio",
             "--python-exit-code", "1", "--python-expr", _BLENDER_SCRIPT,
-            "--", str(source), str(output), _matrix_arg(matrix)]
+            "--", str(source), str(output), _matrix_arg(matrix),
+            *(["fallback"] if _FORCE_FALLBACK else [])]
     result = process.run(args, cancel=ctx.cancel, cwd=ctx.work_dir, env=env, check=False)
     if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
         stdout = "\n".join(result.stdout.splitlines()[-40:])

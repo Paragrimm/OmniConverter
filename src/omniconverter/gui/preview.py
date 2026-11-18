@@ -52,13 +52,15 @@ class PreviewWorker(QThread):
     failed = Signal(int, str)  # generation, message
 
     def __init__(self, converter: Converter, source: SourceFile, target: Format,
-                 values: dict[str, Any], generation: int) -> None:
+                 values: dict[str, Any], generation: int,
+                 combine: list[SourceFile] | None = None) -> None:
         super().__init__()
         self.converter = converter
         self.source = source
         self.target = target
         self.values = values
         self.generation = generation
+        self.combine = combine  # several files joined into one result
         self._cancel = threading.Event()
 
     def cancel(self) -> None:
@@ -67,8 +69,13 @@ class PreviewWorker(QThread):
     def run(self) -> None:
         work = Path(tempfile.mkdtemp(prefix="omniconverter-preview-"))
         try:
-            preview = self.converter.preview(self.source, self.target, self.values, work,
-                                             cancel=self._cancel)
+            if self.combine:
+                preview = self.converter.preview_combined(self.combine, self.target,
+                                                          self.values, work, cancel=self._cancel,
+                                                          in_order=True)
+            else:
+                preview = self.converter.preview(self.source, self.target, self.values, work,
+                                                 cancel=self._cancel)
             frames = [p.read_bytes() for p in preview.frames]
             original = preview.original.read_bytes() if preview.original else None
             if not frames:
@@ -258,8 +265,10 @@ class PreviewPanel(QWidget):
         self.converter = converter
         self.rendered: Rendered | None = None
         self._worker: PreviewWorker | None = None
-        self._pending: tuple[SourceFile, Format, dict[str, Any]] | None = None
-        self._last: tuple[SourceFile, Format, dict[str, Any], str] | None = None
+        self._pending: tuple[SourceFile, Format, dict[str, Any], list[SourceFile] | None
+                             ] | None = None
+        self._last: tuple[SourceFile, Format, dict[str, Any], str, list[SourceFile] | None
+                          ] | None = None
         self._interrupted = False  # stop() came before the last request was shown
         self._generation = 0
         self._index = 0
@@ -319,6 +328,7 @@ class PreviewPanel(QWidget):
         self.info = QLabel()
         self.info.setObjectName("PreviewInfo")
         self.info.setWordWrap(True)
+        self.info.setTextFormat(Qt.TextFormat.PlainText)  # e.g. what a QR code says
         self.info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.info)
 
@@ -333,8 +343,11 @@ class PreviewPanel(QWidget):
     # -- requests ---------------------------------------------------------------------------
 
     def request(self, source: SourceFile, target: Format, values: dict[str, Any] | None,
-                label: str = "") -> None:
-        """Preview *target* for *source*; ``values=None`` means the options are half-typed."""
+                label: str = "", combine: list[SourceFile] | None = None) -> None:
+        """Preview *target* for *source*; ``values=None`` means the options are half-typed.
+
+        With *combine*, the preview shows all those files joined into one result.
+        """
         self.name.setText(label)
         self.name.setToolTip(label)
         if values is None:
@@ -342,8 +355,8 @@ class PreviewPanel(QWidget):
             self._debounce.stop()
             self._set_info(t("gui.preview_invalid"))
             return
-        self._pending = (source, target, dict(values))
-        self._last = (source, target, dict(values), label)
+        self._pending = (source, target, dict(values), combine)
+        self._last = (source, target, dict(values), label, combine)
         self._debounce.start()
 
     def stop(self) -> None:
@@ -387,10 +400,10 @@ class PreviewPanel(QWidget):
         if self._worker is not None:  # the newest request starts once this one has stopped
             self._worker.cancel()
             return
-        source, target, values = self._pending
+        source, target, values, combine = self._pending
         self._pending = None
         self._generation += 1
-        worker = PreviewWorker(self.converter, source, target, values, self._generation)
+        worker = PreviewWorker(self.converter, source, target, values, self._generation, combine)
         worker.rendered.connect(self._on_rendered)
         worker.failed.connect(self._on_failed)
         worker.finished.connect(self._on_finished)

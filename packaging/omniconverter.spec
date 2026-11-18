@@ -4,7 +4,7 @@
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 ROOT = Path(SPECPATH).parent
 SRC = ROOT / "src"
@@ -14,9 +14,12 @@ IS_WINDOWS = sys.platform == "win32"
 
 common = dict(
     pathex=[str(SRC)],
-    # trimesh reads its own resources (e.g. glTF templates) at runtime
-    datas=[(str(RESOURCES), "omniconverter/resources"), *collect_data_files("trimesh")],
-    hiddenimports=["pillow_heif"],
+    # trimesh reads its own resources (e.g. glTF templates) at runtime; pypdfium2_raw its
+    # version file next to the PDFium library
+    datas=[(str(RESOURCES), "omniconverter/resources"), *collect_data_files("trimesh"),
+           *collect_data_files("pypdfium2_raw"), *collect_data_files("pypdfium2")],
+    binaries=collect_dynamic_libs("pypdfium2_raw"),
+    hiddenimports=["pillow_heif", "pypdfium2", "pypdfium2_raw", "zxingcpp"],
     excludes=[
         "tkinter",
         "PySide6.QtQml",

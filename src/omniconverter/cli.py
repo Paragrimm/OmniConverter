@@ -10,7 +10,7 @@ from pathlib import Path
 from omniconverter import __version__
 from omniconverter.config import Settings
 from omniconverter.core.converter import Converter, SourceFile
-from omniconverter.core.errors import ConversionError
+from omniconverter.core.errors import ConversionError, OptionError
 from omniconverter.core.formats import FORMATS, Category, get_format
 from omniconverter.core.options import Kind, format_time
 from omniconverter.core.tools import TOOLS, ToolLocator, install_hint
@@ -82,7 +82,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error(t("cli.error.no_target"))
         target = get_format(args.to)
         if args.options:
-            return cmd_options(converter, sources[0], target)
+            return cmd_options(converter, sources, target)
         return cmd_convert(converter, sources, target, args)
     except KeyError as exc:
         print(t("cli.error.unknown_format", fmt=exc.args[0]), file=sys.stderr)
@@ -111,6 +111,8 @@ def cmd_convert(converter: Converter, sources: list[SourceFile], target, args) -
     raw = parse_sets(args.set)
     output: Path | None = args.output
     many = len(sources) > 1
+    if converter.wants_combine(sources, target, raw):
+        return cmd_combine(converter, sources, target, raw, args)
     if many and output is not None and output.exists() and not output.is_dir():
         raise ConversionError(t("cli.error.output_dir"))
     failures = 0
@@ -124,6 +126,9 @@ def cmd_convert(converter: Converter, sources: list[SourceFile], target, args) -
             out = converter.output_path(source, target, values, output)
         else:
             out = output
+            if (converter.writes_folder(source, target, values)
+                    and out.suffix.lower().lstrip(".") in target.extensions):
+                out = out.with_suffix("")  # "-o pages.png" for many pages: folder "pages"
             if out.exists() and not args.overwrite:
                 raise ConversionError(t("cli.error.exists", path=str(out)))
         label = f"[{index}/{len(sources)}] " if many else ""
@@ -141,6 +146,29 @@ def cmd_convert(converter: Converter, sources: list[SourceFile], target, args) -
         if not args.quiet:
             print(f"\r{label}{source.name} → {result}", file=sys.stderr)
     return 1 if failures else 0
+
+
+def cmd_combine(converter: Converter, sources: list[SourceFile], target, raw: dict,
+                args) -> int:
+    """Several files into one, e.g. pictures → one GIF or PDF (``-s combine=no`` to avoid)."""
+    known = {o.key for o in converter.options_for(sources, target)}
+    unknown = sorted(set(raw) - known)
+    if unknown:
+        raise OptionError(", ".join(unknown), "unknown option")
+    output: Path | None = args.output
+    if output is None or output.is_dir():
+        out = converter.combined_output_path(sources, target, output)
+    else:
+        out = output
+        if out.exists() and not args.overwrite:
+            raise ConversionError(t("cli.error.exists", path=str(out)))
+    name = t("gui.n_files", n=len(sources))
+    show_progress = not args.quiet and sys.stderr.isatty()
+    progress = _progress_printer(name) if show_progress else None
+    result = converter.combine(sources, target, out, raw, on_progress=progress)
+    if not args.quiet:
+        print(f"\r{name} → {result}", file=sys.stderr)
+    return 0
 
 
 def _progress_printer(name: str):
@@ -173,8 +201,8 @@ def cmd_list(converter: Converter, sources: list[SourceFile]) -> int:
     return 0
 
 
-def cmd_options(converter: Converter, source: SourceFile, target) -> int:
-    options = converter.options(source, target)
+def cmd_options(converter: Converter, sources: list[SourceFile], target) -> int:
+    options = converter.options_for(sources, target)
     if not options:
         print(t("cli.no_options"))
         return 0

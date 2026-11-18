@@ -120,3 +120,32 @@ def test_list_for_generators(capsys):
     assert main(["--list", "--generate", "noise"]) == 0
     out = capsys.readouterr().out
     assert out.splitlines()[0] == "Noise-Map" and "jpg" in out
+
+
+def test_several_pictures_into_one_pdf_or_each_on_its_own(tmp_path, capsys):
+    from PIL import Image
+
+    paths = []
+    for index in (1, 2):
+        path = tmp_path / f"page{index}.png"
+        Image.new("RGB", (20, 20), "red").save(path)
+        paths.append(str(path))
+    assert main([*paths, "--to", "pdf"]) == 0
+    assert (tmp_path / "page.pdf").is_file()
+    assert "2 files" in capsys.readouterr().err
+    assert main([*paths, "--to", "pdf", "-s", "combine=no", "-q"]) == 0
+    assert (tmp_path / "page1.pdf").is_file() and (tmp_path / "page2.pdf").is_file()
+    assert main([*paths, "--to", "gif", "-o", str(tmp_path / "anim.gif"), "-s",
+                 "frame_ms=100", "-q"]) == 0
+    assert (tmp_path / "anim.gif").is_file()
+    assert main([*paths, "--to", "gif", "-s", "bogus=1"]) == 1
+
+
+def test_pdf_pages_to_a_named_folder(tmp_path):
+    from PIL import Image
+
+    pages = [Image.new("RGB", (50, 70), c) for c in ("red", "blue")]
+    src = tmp_path / "doc.pdf"
+    pages[0].save(src, save_all=True, append_images=pages[1:])
+    assert main([str(src), "--to", "jpg", "-o", str(tmp_path / "pages.jpg"), "-q"]) == 0
+    assert sorted(p.name for p in (tmp_path / "pages").iterdir()) == ["doc-1.jpg", "doc-2.jpg"]

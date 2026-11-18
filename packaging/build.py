@@ -87,6 +87,15 @@ def pyinstaller() -> None:
          ROOT / "packaging" / "omniconverter.spec"])
 
 
+def licenses() -> None:
+    """License texts of everything bundled, as ``licenses/`` next to the executables."""
+    log("license texts")
+    sys.path.insert(0, str(ROOT / "packaging"))
+    from licenses import collect
+
+    collect(BUNDLE)
+
+
 def portable() -> Path:
     """The bundle plus the portable marker, as ZIP (Windows) or tar.gz (Linux)."""
     log("portable archive")
@@ -185,6 +194,9 @@ def deb() -> Path:
     docs = share / "doc" / "omniconverter"
     docs.mkdir(parents=True)
     shutil.copyfile(ROOT / "LICENSE", docs / "copyright")
+    with (docs / "copyright").open("a", encoding="utf-8") as fh:
+        fh.write("\nThird-party components and their licenses: "
+                 "/opt/omniconverter/licenses/THIRD-PARTY-NOTICES.md\n")
 
     size = sum(p.stat().st_size for p in root.rglob("*") if p.is_file() and not p.is_symlink())
     control = root / "DEBIAN" / "control"
@@ -233,6 +245,7 @@ def main() -> int:
         pyinstaller()
     if not BUNDLE.is_dir():
         raise SystemExit(f"{BUNDLE} missing – run without --no-pyinstaller first")
+    licenses()
     OUT.mkdir(parents=True, exist_ok=True)
     built = [STEPS[t]() for t in targets]
     log("done")

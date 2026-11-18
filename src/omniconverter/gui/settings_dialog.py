@@ -20,9 +20,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from omniconverter import integration
+from omniconverter import __version__, integration, runtime
 from omniconverter.config import Settings
 from omniconverter.core.tools import TOOLS, ToolLocator, install_hint
+from omniconverter.gui.widgets import open_file
 from omniconverter.i18n import t
 
 
@@ -80,6 +81,16 @@ class SettingsDialog(QDialog):
         privacy.setWordWrap(True)
         privacy.setObjectName("Muted")
         layout.addWidget(privacy)
+
+        about = QLabel(f"OmniConverter {__version__} · MIT")
+        about.setObjectName("Muted")
+        licenses = runtime.licenses_path()
+        if licenses is not None:
+            about.setText(f'{about.text()} · <a href="licenses">{t("gui.settings.licenses")}</a>')
+            about.setTextFormat(Qt.TextFormat.RichText)
+            about.setToolTip(str(licenses))
+            about.linkActivated.connect(lambda _link: open_file(licenses))
+        layout.addWidget(about)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)

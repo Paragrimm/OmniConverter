@@ -31,9 +31,9 @@ from PySide6.QtWidgets import (
 
 from omniconverter import APP_NAME
 from omniconverter.config import Settings
-from omniconverter.core.converter import Converter, SourceFile, unique_path
+from omniconverter.core.converter import Converter, SourceFile, combine_order, unique_path
 from omniconverter.core.errors import ConversionError
-from omniconverter.core.formats import CATEGORY_ORDER, Category, Format
+from omniconverter.core.formats import CATEGORY_ORDER, FORMATS, Category, Format, display_label
 from omniconverter.core.registry import TargetChoice
 from omniconverter.core.tools import TOOLS, install_hint
 from omniconverter.gui.options_form import OptionsForm
@@ -43,6 +43,7 @@ from omniconverter.gui.widgets import (
     DropArea,
     EmoteLabel,
     FlowLayout,
+    OrderList,
     app_icon,
     dropped_text,
     emote_credit,
@@ -60,6 +61,7 @@ from omniconverter.integration import supported_source_formats
 
 MERGE_WINDOW_S = 3.0  # files arriving this soon after the last ones are added to them
 PREVIEW_WINDOW_WIDTH = 1060  # the window grows to this once, when the preview first appears
+KNOWN_EXTENSIONS = {e for f in FORMATS.values() for e in f.extensions}
 
 
 def file_filter() -> str:
@@ -140,7 +142,9 @@ class ConfigPage(QWidget):
         self.sources: list[SourceFile] = []
         self.target: Format | None = None
         self.form: OptionsForm | None = None
-        self.custom_output: Path | None = None  # single file: chosen file; many: folder
+        # One result (a single file, or several joined): its path; many results: their folder.
+        self.custom_output: Path | None = None
+        self._output_mode = "path"
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(20, 16, 20, 16)
@@ -208,6 +212,16 @@ class ConfigPage(QWidget):
         self.body_layout.addWidget(self.options_title)
         self.options_holder = QVBoxLayout()
         self.body_layout.addLayout(self.options_holder)
+        # Order of the files joined into one (only while joining).
+        self.order_title = QLabel(t("gui.order"))
+        self.order_title.setObjectName("Section")
+        self.order_list = OrderList()
+        self.order_list.changed.connect(self._update_output)
+        self.order_list.changed.connect(self._update_preview)
+        self.body_layout.addWidget(self.order_title)
+        self.body_layout.addWidget(self.order_list)
+        self.order_title.hide()
+        self.order_list.hide()
         self.body_layout.addStretch(1)
 
         outer.addWidget(hline())
@@ -247,8 +261,10 @@ class ConfigPage(QWidget):
         self.sources = sources
         self.target = None
         self.custom_output = None
+        self._output_mode = self._mode()
         self.set_note(note)
         self.preview.clear()
+        self.order_list.set_items([(s.name, s) for s in combine_order(sources)])
         self._fill_header()
         self._fill_targets(choices)
         self._set_form(None)
@@ -328,13 +344,13 @@ class ConfigPage(QWidget):
             holder = QWidget()
             flow = FlowLayout(holder, spacing=6)
             for choice in in_cat:
-                button = QPushButton(choice.format.label)
+                button = QPushButton(display_label(choice.format))
                 button.setObjectName("TargetButton")
                 button.setCheckable(True)
                 button.setCursor(Qt.CursorShape.PointingHandCursor)
                 button.setProperty("format_id", choice.format.id)
                 button.setProperty("format", choice.format)
-                button.setAccessibleName(choice.format.label)
+                button.setAccessibleName(display_label(choice.format))
                 if not choice.available:
                     button.setEnabled(False)
                     tools = ", ".join(TOOLS[x].label for x in choice.missing_tools)
@@ -355,10 +371,8 @@ class ConfigPage(QWidget):
 
     def _select(self, fmt: Format) -> None:
         self.target = fmt
-        if self.custom_output is not None and len(self.sources) == 1:
-            self.custom_output = self.custom_output.with_suffix(f".{fmt.extension}")
         try:
-            options = self.window_.converter.options(self.sources[0], fmt)
+            options = self.window_.converter.options_for(self.sources, fmt)
         except ConversionError as exc:
             self.set_note(exc.message)
             options = []
@@ -389,12 +403,51 @@ class ConfigPage(QWidget):
     def _values(self) -> dict:
         return self.form.conversion_values() if self.form and self.form.is_valid() else {}
 
+    def combining(self) -> bool:
+        """Several files go into one result (e.g. pictures → one GIF or PDF)."""
+        return (len(self.sources) > 1 and self.target is not None
+                and self.window_.converter.wants_combine(self.sources, self.target,
+                                                         self._values()))
+
+    def ordered_sources(self) -> list[SourceFile]:
+        """The files in the order they are joined (by name until the user moves them)."""
+        return self.order_list.values()
+
+    def _update_order(self) -> None:
+        on = self.combining()
+        self.order_title.setVisible(on)
+        self.order_list.setVisible(on)
+
+    def _mode(self) -> str:
+        """``path``: one result, chosen as a file (or folder); ``dir``: the folder for many."""
+        return "path" if len(self.sources) == 1 or self.combining() else "dir"
+
+    def _folder_result(self) -> bool:
+        return (len(self.sources) == 1 and self.target is not None
+                and self.window_.converter.writes_folder(self.sources[0], self.target,
+                                                         self._values()))
+
+    def _fit_custom_output(self) -> None:
+        """Keep a chosen location in step with the target: new extension, or none (folder)."""
+        mode = self._mode()
+        if mode != self._output_mode:  # a file chosen for one result is no folder for many
+            self._output_mode = mode
+            self.custom_output = None
+        if self.custom_output is None or self.target is None or mode != "path":
+            return
+        chosen = self.custom_output
+        known = chosen.suffix.lower().lstrip(".") in KNOWN_EXTENSIONS
+        stem = chosen.stem if known else chosen.name
+        name = stem if self._folder_result() else f"{stem}.{self.target.extension}"
+        self.custom_output = chosen.with_name(name)
+
     # -- preview ------------------------------------------------------------------------------
 
     def _update_preview(self) -> None:
+        self._update_order()
         converter = self.window_.converter
-        if not self.sources or self.target is None or not converter.can_preview(
-                self.sources[0], self.target):
+        if not self.sources or self.target is None or not (
+                self.combining() or converter.can_preview(self.sources[0], self.target)):
             self.preview.clear()
             self.preview.hide()
             return
@@ -406,13 +459,18 @@ class ConfigPage(QWidget):
                 half = max(1, self.splitter.width() // 2)
                 self.splitter.setSizes([half, half])
         values = None if self.form is not None and not self.form.is_valid() else self._values()
+        if self.combining():
+            label = t("gui.n_files", n=len(self.sources))
+            self.preview.request(self.sources[0], self.target, values, label,
+                                 combine=self.ordered_sources())
+            return
         label = self.sources[0].name if len(self.sources) > 1 else ""
         self.preview.request(self.sources[0], self.target, values, label)
 
     # -- output location --------------------------------------------------------------------
 
     def output_for_display(self) -> str:
-        if len(self.sources) != 1:
+        if self._mode() == "dir":
             if self.custom_output:
                 return str(self.custom_output)
             return t("gui.next_to_originals")
@@ -423,11 +481,15 @@ class ConfigPage(QWidget):
 
     def _default_output(self) -> Path:
         assert self.target is not None
+        converter = self.window_.converter
+        if self.combining():
+            return converter.combined_output_path(self.ordered_sources(), self.target,
+                                                  in_order=True)
         source = self.sources[0]
-        return self.window_.converter.output_path(source, self.target, self._values(),
-                                                  default_dir(source))
+        return converter.output_path(source, self.target, self._values(), default_dir(source))
 
     def _update_output(self) -> None:
+        self._fit_custom_output()
         text = self.output_for_display()
         metrics = self.output_label.fontMetrics()
         width = max(120, self.output_label.width())
@@ -440,7 +502,13 @@ class ConfigPage(QWidget):
         self._update_output()
 
     def _choose_output(self) -> None:
-        if len(self.sources) == 1 and self.target is not None:
+        if self._mode() == "path" and self._folder_result():  # e.g. the pages of a PDF
+            start = self.custom_output or self._default_output()
+            folder = QFileDialog.getExistingDirectory(self, t("gui.choose_folder"),
+                                                      str(start.parent))
+            if folder:
+                self.custom_output = unique_path(Path(folder) / start.name, folder=True)
+        elif self._mode() == "path" and self.target is not None:
             start = self.custom_output or self._default_output()
             ext = self.target.extension
             path, _ = QFileDialog.getSaveFileName(
@@ -461,6 +529,9 @@ class ConfigPage(QWidget):
     def jobs(self) -> list[Job]:
         assert self.target is not None
         values = self.form.conversion_values() if self.form else {}
+        if self.combining():
+            return [Job(self.sources[0], self.target, values, output=self.custom_output,
+                        combine=self.ordered_sources())]
         if len(self.sources) == 1:
             source = self.sources[0]
             return [Job(source, self.target, values, output=self.custom_output,
@@ -662,9 +733,10 @@ class MainWindow(QMainWindow):
 
     def back_to_config(self) -> None:
         page = self.config_page
-        if page.custom_output is not None and len(page.sources) == 1:
+        if page.custom_output is not None and page._mode() == "path":
             # The chosen file holds the last result now; a second run must not overwrite it.
-            page.custom_output = unique_path(page.custom_output)
+            page.custom_output = unique_path(page.custom_output,
+                                             folder=page.custom_output.is_dir())
         page._update_output()
         page.preview.resume()
         self.stack.setCurrentWidget(page)
@@ -802,10 +874,11 @@ class MainWindow(QMainWindow):
 
     def _on_job_started(self, jobs: list[Job], index: int) -> None:
         job = jobs[index]
-        target = job.target.label
+        target = display_label(job.target)
         if job.target.category is Category.QR:  # "PNG" alone would be misleading
-            target = f"{t('category.qr')} {target}"
-        text = f"{job.source.name} → {target}"
+            target = f"{t('category.qr')}: {target}"
+        name = t("gui.n_files", n=len(job.combine)) if job.combine else job.source.name
+        text = f"{name} → {target}"
         if len(jobs) > 1:
             text = f"{text}  ({index + 1}/{len(jobs)})"
         self.progress_page.set_job(text)

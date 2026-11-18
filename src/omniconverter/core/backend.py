@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
@@ -106,6 +106,13 @@ class Backend(ABC):
         """File name (without extension) for sources without a file, e.g. ``noise-42``."""
         return None
 
+    def writes_folder(self, request: ConversionRequest) -> bool:
+        """Whether the result is a folder of files, e.g. one image per page of a PDF.
+
+        :meth:`convert` then gets a fresh folder as *output* and fills it.
+        """
+        return False
+
     @abstractmethod
     def convert(self, request: ConversionRequest, output: Path, ctx: ConversionContext) -> None:
         """Convert ``request.source`` and write the result to *output*."""
@@ -118,3 +125,23 @@ class Backend(ABC):
         """Render a quick look at the result into ``ctx.work_dir``."""
         raise UnsupportedConversion(
             f"{request.source_format.label} → {request.target_format.label}")
+
+    # -- several sources into one result (images → GIF, pages → PDF) -----------------------
+    # Combining runs in-process (Pillow, PDFium), so it never depends on external tools.
+
+    def can_combine(self, sources: Sequence[Format], target: Format) -> bool:
+        """Whether files of these formats can be joined into one *target* file."""
+        return False
+
+    def combine_options(self, sources: Sequence[Format], target: Format) -> list[Option]:
+        """Options of the joined result (all keys a :meth:`combine` request may carry)."""
+        return []
+
+    def combine(self, requests: Sequence[ConversionRequest], output: Path,
+                ctx: ConversionContext) -> None:
+        """Join all requests' sources, in order, into the single file *output*."""
+        raise UnsupportedConversion(requests[0].target_format.label)
+
+    def preview_combined(self, requests: Sequence[ConversionRequest],
+                         ctx: ConversionContext) -> Preview:
+        raise UnsupportedConversion(requests[0].target_format.label)

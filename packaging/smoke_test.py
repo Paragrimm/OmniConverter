@@ -78,6 +78,11 @@ def main() -> int:
     env_note = os.environ.get("APPIMAGE_EXTRACT_AND_RUN")
     print(f"Testing {exe}" + (" (APPIMAGE_EXTRACT_AND_RUN=1)" if env_note else ""))
 
+    bundle = Path(exe).resolve().parent  # also through the .deb's /usr/bin symlink
+    if (bundle / "_internal").is_dir() or (bundle / "base_library.zip").exists():
+        notices = bundle / "licenses" / "THIRD-PARTY-NOTICES.md"
+        check("license texts are bundled", notices.is_file()
+              and any((bundle / "licenses").glob("pypdfium2-*")), str(bundle / "licenses"))
     result = run(cmd, "--version")
     check("--version", result.returncode == 0, result.stdout.strip() or result.stderr.strip())
     result = run(cmd, "--tools")
@@ -98,12 +103,21 @@ def main() -> int:
         png.write_bytes(_tiny_png())
         for target in ("jpg", "webp", "avif", "heic", "ico", "pdf"):
             convert(cmd, png, target)
+        # PDF pages as images (PDFium is bundled), several pictures joined into one GIF
+        produce(cmd, "picture.pdf → page.png", work / "page.png", str(work / "picture.pdf"),
+                "--to", "png", "-o", str(work / "page.png"))
+        produce(cmd, "2 pictures → one GIF", work / "joined.gif", str(png),
+                str(work / "picture.jpg"), "--to", "gif", "-o", str(work / "joined.gif"))
 
         # Generated images (numpy, segno) and texture maps
         produce(cmd, "picture.png → picture_normal.png", work / "picture_normal.png",
                 str(png), "--to", "normal-map")
         produce(cmd, "link → QR code", work / "qr.png",
                 "--text", "https://example.com", "--to", "qr", "-o", str(work / "qr.png"))
+        produce(cmd, "QR code → text (zxing-cpp is bundled)", work / "qr.txt", str(work / "qr.png"),
+                "--to", "qr-text", "-o", str(work / "qr.txt"))
+        text = (work / "qr.txt").read_text(encoding="utf-8").strip()
+        check("QR code reads back", text == "https://example.com", text)
         produce(cmd, "noise map", work / "noise.jpg", "--generate", "noise", "--to", "jpg",
                 "-s", "seed=1", "-s", "width=64", "-s", "height=64", "-o", str(work / "noise.jpg"))
 

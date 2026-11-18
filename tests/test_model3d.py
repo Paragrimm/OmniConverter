@@ -29,6 +29,14 @@ def convert(converter, path, target, **options):
     return converter.convert(source, fmt, converter.output_path(source, fmt), options)
 
 
+def convert_verbose(converter, path, target, **options):
+    """Like :func:`convert`, but a failure shows what Blender said, not only that it failed."""
+    try:
+        return convert(converter, path, target, **options)
+    except ConversionError as exc:
+        pytest.fail(f"{exc.message}\n{exc.details}")
+
+
 def extents(path):
     return np.round(trimesh.load(str(path), force="scene").extents, 4).tolist()
 
@@ -101,14 +109,18 @@ def test_fbx_needs_blender(converter, model, monkeypatch):
 
 
 @needs_blender
-def test_fbx_round_trip_with_blender(converter, model, tmp_path):
-    fbx = convert(converter, model, "fbx")
+@pytest.mark.parametrize("fallback", [False, True], ids=["operators", "fallback"])
+def test_fbx_round_trip_with_blender(converter, model, tmp_path, monkeypatch, fallback):
+    # "fallback": the paths for Blender builds whose FBX operators lost options (Blender 5)
+    monkeypatch.setattr("omniconverter.backends.model3d._FORCE_FALLBACK", fallback)
+    fbx = convert_verbose(converter, model, "fbx")
     assert fbx.read_bytes().startswith(b"Kaydara FBX Binary")
-    assert extents(convert(converter, fbx, "glb")) == [1, 2, 3]
-    obj = convert(converter, fbx, "obj", scale="m_to_cm")  # FBX → GLB (Blender) → OBJ
+    assert extents(convert_verbose(converter, fbx, "glb")) == [1, 2, 3]
+    obj = convert_verbose(converter, fbx, "obj", scale="m_to_cm")  # FBX → GLB (Blender) → OBJ
     assert extents(obj) == [100, 200, 300]
     assert list(tmp_path.glob("my_box*.png"))  # the texture survived the trip through FBX
-    stl_fbx = convert(converter, convert(converter, model, "stl"), "fbx", up_axis="y_to_z")
-    assert extents(convert(converter, stl_fbx, "glb")) == [1, 3, 2]
+    stl = convert_verbose(converter, model, "stl")
+    stl_fbx = convert_verbose(converter, stl, "fbx", up_axis="y_to_z")
+    assert extents(convert_verbose(converter, stl_fbx, "glb")) == [1, 3, 2]
     # Blender must not leave anything next to the source (e.g. unpacked textures)
     assert not [p for p in tmp_path.iterdir() if p.is_dir() or ".omni-" in p.name]

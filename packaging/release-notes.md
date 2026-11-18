@@ -11,8 +11,9 @@
 Für Video/Audio, Dokumente, Office-Formate und FBX nutzt OmniConverter installierte
 Programme: FFmpeg (`winget install Gyan.FFmpeg`), Pandoc (`winget install
 JohnMacFarlane.Pandoc`), LibreOffice (`winget install TheDocumentFoundation.LibreOffice`) und
-Blender (`winget install BlenderFoundation.Blender`). Bilder, Daten, QR-Codes, Textur- und
-Noise-Maps sowie OBJ, glTF/GLB, STL und PLY funktionieren ohne Zusatzprogramme.
+Blender (`winget install BlenderFoundation.Blender`). Bilder, PDFs, Daten, QR-Codes (erzeugen
+und auslesen), Textur- und Noise-Maps sowie OBJ, glTF/GLB, STL und PLY funktionieren ohne
+Zusatzprogramme.
 
 Emotes by [RoamingOwl](https://roamingowl.itch.io/owlish-emotes) (CC BY 4.0).
 
@@ -21,3 +22,8 @@ Die Windows-Dateien sind (noch) nicht signiert. Die SmartScreen-Warnung lässt s
 `SHA256SUMS.txt`.
 
 Die Linux-Pakete laufen ab glibc 2.35 (Ubuntu 22.04, Debian 12, Fedora 36 und neuer).
+
+Lizenzen: OmniConverter selbst steht unter MIT. Die Pakete enthalten Bibliotheken von
+Drittanbietern (u. a. Qt/LGPL-3.0, PDFium, zxing-cpp, x265/GPL-2.0 für HEIC); ihre Lizenztexte
+liegen im Ordner `licenses/`, die Übersicht steht in
+[THIRD-PARTY-NOTICES.md](https://github.com/Paragrimm/OmniConverter/blob/main/THIRD-PARTY-NOTICES.md).
