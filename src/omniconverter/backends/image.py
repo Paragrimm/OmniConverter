@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +33,7 @@ _ANIMATED = {"gif", "webp", "png"}
 _ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
 PALETTE_SIZES = (256, 128, 64, 32, 16, 8, 4, 2)  # "colors" for PNG; "all" keeps true color
 _OPTIMIZE_PIXELS = 4_000_000  # smallest PNG encoding is slow for huge images
+COMBINE_TARGETS = ("gif", "pdf")  # several images → one animation / one document
 
 _heif_registered = False
 
@@ -128,6 +129,81 @@ class ImageBackend(Backend):
         return Preview(shown, durations, original=original, width=width, height=height,
                        size_bytes=result.stat().st_size, note=note)
 
+    # -- several images into one GIF or PDF ----------------------------------------------------
+
+    def can_combine(self, sources: Sequence[Format], target: Format) -> bool:
+        return target.id in COMBINE_TARGETS and all(f.id in SOURCES for f in sources)
+
+    def combine_options(self, sources: Sequence[Format], target: Format) -> list[Option]:
+        opts = self.options(sources[0], target)
+        if target.id == "gif":
+            opts += [
+                Option("frame_ms", t("opt.frame_ms"), Kind.INT, 500, minimum=20, maximum=60_000,
+                       suffix=" ms", help=t("opt.frame_ms_help")),
+                Option("loop", t("opt.loop"), Kind.CHOICE, "forever",
+                       choices=tuple((v, t(f"opt.loop.{v}")) for v in ("forever", "once"))),
+            ]
+        return opts
+
+    def combine(self, requests: Sequence[ConversionRequest], output: Path,
+                ctx: ConversionContext) -> None:
+        frames, save = self._render_many(requests, ctx)
+        _save(frames, save, requests[0].target_format.id, output)
+
+    def preview_combined(self, requests: Sequence[ConversionRequest],
+                         ctx: ConversionContext) -> Preview:
+        target = requests[0].target_format.id
+        frames, save = self._render_many(requests, ctx)
+        result = ctx.work_dir / f"result.{requests[0].target_format.extension}"
+        _save(frames, save, target, result)
+        ctx.check_cancelled()
+        if target == "pdf":
+            shown = [save_image(frames[0], ctx.work_dir / "frame-0000.png")]
+            durations: list[int] = []
+            width, height = frames[0].size
+            note = t("preview.pages", n=len(frames))
+        else:
+            shown, durations, (width, height) = image_frames(result, ctx)
+            note = t("preview.images", n=len(requests))
+        return Preview(shown, durations, width=width, height=height,
+                       size_bytes=result.stat().st_size, note=note)
+
+    def _render_many(self, requests: Sequence[ConversionRequest], ctx: ConversionContext
+                     ) -> tuple[list[Any], dict[str, Any]]:
+        """All images (and the frames/pages of animations and TIFFs) one after another."""
+        from PIL import Image, ImageSequence, UnidentifiedImageError
+
+        register_heif()
+        target = requests[0].target_format.id
+        opts = requests[0].options
+        still_ms = int(opts.get("frame_ms", 500))
+        frames: list[Any] = []
+        durations: list[int] = []
+        for index, request in enumerate(requests):
+            ctx.check_cancelled()
+            ctx.progress(index / len(requests) * 0.8)
+            try:
+                with Image.open(request.source) as im:
+                    many = getattr(im, "n_frames", 1) > 1 and (
+                        target == "gif" or im.format == "TIFF")
+                    for frame in ImageSequence.Iterator(im) if many else [im]:
+                        ctx.check_cancelled()
+                        frames.append(_prepare(frame.copy(), target, opts))
+                        duration = frame.info.get("duration") if many else None
+                        durations.append(int(duration or still_ms))
+            except (UnidentifiedImageError, OSError, ValueError) as exc:
+                name = request.source.name if request.source else ""
+                raise ConversionError(f"{t('error.image_failed')} ({name})", str(exc)) from exc
+        save: dict[str, Any] = {"save_all": True, "append_images": frames[1:]}
+        if target == "gif":
+            frames = _same_size(frames)
+            save.update(append_images=frames[1:], duration=durations, disposal=2)
+            if opts.get("loop", "forever") == "forever":
+                save["loop"] = 0  # without the loop extension, a GIF plays once
+        else:
+            save["resolution"] = 96.0
+        return frames, save
+
     def _render(self, request: ConversionRequest, ctx: ConversionContext
                 ) -> tuple[list[Any], dict[str, Any]]:
         """The frames to save and the arguments for Pillow's ``save``."""
@@ -199,6 +275,22 @@ def _save(frames: list[Any], save: dict[str, Any], target: str, output: Path) ->
         frames[0].save(output, format=_PIL_FORMAT[target], **save)
     except (OSError, ValueError, KeyError) as exc:
         raise ConversionError(t("error.image_failed"), str(exc)) from exc
+
+
+def _same_size(frames: list[Any]) -> list[Any]:
+    """Fit every frame into the first one's size, centered on transparency (GIF frames)."""
+    from PIL import Image, ImageOps
+
+    size = frames[0].size
+    result = [frames[0]]
+    for frame in frames[1:]:
+        if frame.size != size:
+            fitted = ImageOps.contain(frame.convert("RGBA"), size, Image.Resampling.LANCZOS)
+            canvas = Image.new("RGBA", size, (0, 0, 0, 0))
+            canvas.paste(fitted, ((size[0] - fitted.width) // 2, (size[1] - fitted.height) // 2))
+            frame = canvas
+        result.append(frame)
+    return result
 
 
 def _prepare(im: Any, target: str, opts: dict[str, Any]) -> Any:

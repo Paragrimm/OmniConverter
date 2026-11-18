@@ -111,3 +111,51 @@ def test_only_text_like_files_offer_qr_codes(converter, tmp_path):
     assert "qr-png" not in ids
     text_targets = {c.format.id for c in converter.targets([SourceFile.from_text("x")])}
     assert text_targets == {"qr-png", "qr-svg"}
+
+
+# -- reading codes -----------------------------------------------------------------------------
+
+
+def test_reading_a_qr_code_from_a_picture(converter, tmp_path):
+    text = "WIFI:T:WPA;S:Eulennest;P:geheim;;"
+    picture = tmp_path / "poster.jpg"
+    code = tmp_path / "code.png"
+    segno.make(text).save(code, scale=6)
+    with Image.open(code) as im:  # a photo-like picture: code in a corner, JPEG
+        canvas = Image.new("RGB", (600, 400), "#d0c8b0")
+        canvas.paste(im.convert("RGB"), (380, 180))
+        canvas.save(picture, quality=85)
+    source = converter.inspect(picture)
+    target = get_format("qr-text")
+    assert target.id in {c.format.id for c in converter.targets([source])}
+    out = converter.output_path(source, target)
+    assert out == tmp_path / "poster_qr.txt"
+    converter.convert(source, target, out)
+    assert out.read_text(encoding="utf-8") == text + "\n"
+    preview = converter.preview(source, target, {}, tmp_path)
+    assert preview.note == text
+    with Image.open(preview.frames[0]) as im:
+        assert im.size == (600, 400)
+        assert im.convert("RGB").getpixel((380 + 10, 180 + 3))[1] > 150  # outlined in green
+
+
+def test_reading_several_codes_and_transparent_ones(converter, tmp_path):
+    picture = tmp_path / "two.png"
+    canvas = Image.new("RGBA", (700, 300), (0, 0, 0, 0))
+    for index, text in enumerate(("first", "second")):
+        path = tmp_path / f"{index}.png"
+        segno.make(text).save(path, scale=8, light=None)
+        with Image.open(path) as im:
+            canvas.paste(im.convert("RGBA"), (20 + index * 350, 20))
+    canvas.save(picture)
+    out = converter.convert(converter.inspect(picture), get_format("qr-text"),
+                            tmp_path / "out.txt")
+    assert out.read_text(encoding="utf-8") == "first\n\nsecond\n"
+
+
+def test_no_code_in_the_picture(converter, tmp_path):
+    picture = tmp_path / "plain.png"
+    Image.new("RGB", (200, 200), "white").save(picture)
+    with pytest.raises(ConversionError, match="No QR code"):
+        converter.convert(converter.inspect(picture), get_format("qr-text"), tmp_path / "x.txt")
+    assert not (tmp_path / "x.txt").exists()

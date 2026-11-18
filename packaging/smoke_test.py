@@ -98,12 +98,21 @@ def main() -> int:
         png.write_bytes(_tiny_png())
         for target in ("jpg", "webp", "avif", "heic", "ico", "pdf"):
             convert(cmd, png, target)
+        # PDF pages as images (PDFium is bundled), several pictures joined into one GIF
+        produce(cmd, "picture.pdf → page.png", work / "page.png", str(work / "picture.pdf"),
+                "--to", "png", "-o", str(work / "page.png"))
+        produce(cmd, "2 pictures → one GIF", work / "joined.gif", str(png),
+                str(work / "picture.jpg"), "--to", "gif", "-o", str(work / "joined.gif"))
 
         # Generated images (numpy, segno) and texture maps
         produce(cmd, "picture.png → picture_normal.png", work / "picture_normal.png",
                 str(png), "--to", "normal-map")
         produce(cmd, "link → QR code", work / "qr.png",
                 "--text", "https://example.com", "--to", "qr", "-o", str(work / "qr.png"))
+        produce(cmd, "QR code → text (zxing-cpp is bundled)", work / "qr.txt", str(work / "qr.png"),
+                "--to", "qr-text", "-o", str(work / "qr.txt"))
+        text = (work / "qr.txt").read_text(encoding="utf-8").strip()
+        check("QR code reads back", text == "https://example.com", text)
         produce(cmd, "noise map", work / "noise.jpg", "--generate", "noise", "--to", "jpg",
                 "-s", "seed=1", "-s", "width=64", "-s", "height=64", "-o", str(work / "noise.jpg"))
 

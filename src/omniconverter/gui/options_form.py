@@ -153,6 +153,8 @@ class OptionsForm(QWidget):
         else:
             edit = QLineEdit(str(opt.default or ""))
             edit.setPlaceholderText(opt.help)
+            # The hint doubles as the placeholder: make room for it.
+            edit.setMinimumWidth(min(320, edit.fontMetrics().horizontalAdvance(opt.help) + 24))
             edit.textChanged.connect(self._on_change)
             widget = edit
         if opt.help:

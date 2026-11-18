@@ -137,6 +137,7 @@ _ALL = [
        detect=False),
     _f("qr-png", "PNG", Category.QR, "png", suffix="_qr", detect=False),
     _f("qr-svg", "SVG", Category.QR, "svg", suffix="_qr", detect=False),
+    _f("qr-text", "TXT", Category.QR, "txt", suffix="_qr", detect=False),  # what a code says
     # Sources without a file
     _f("text", "Link/Text", Category.GENERATOR, "", detect=False),
     _f("noise", "Noise-Map", Category.GENERATOR, "", detect=False),
@@ -144,7 +145,16 @@ _ALL = [
 
 FORMATS: dict[str, Format] = {f.id: f for f in _ALL}
 _BY_EXTENSION: dict[str, Format] = {ext: f for f in _ALL if f.detect for ext in f.extensions}
-_ALIASES = {"qr": "qr-png", "normal": "normal-map", "specular": "specular-map"}
+_ALIASES = {"qr": "qr-png", "normal": "normal-map", "specular": "specular-map",
+            "qr-read": "qr-text", "read-qr": "qr-text"}
+
+
+def display_label(fmt: Format) -> str:
+    """The label shown on buttons; a few derived targets have a translated one."""
+    from omniconverter.i18n import MESSAGES, t
+
+    key = f"format.{fmt.id.replace('-', '_')}"
+    return t(key) if key in MESSAGES else fmt.label
 
 
 def get_format(format_id: str) -> Format:

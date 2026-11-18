@@ -1,7 +1,8 @@
 # OmniConverter
 
 **Ein Werkzeug für alles:** Videos, Musik, Bilder, 3D-Modelle, Dokumente, Tabellen und Daten
-umwandeln, dazu QR-Codes, Normal-/Specular-Maps und Noise-Maps erzeugen – mit einer einzigen,
+umwandeln, PDFs in Bilder zerlegen und Bilder zu einem PDF oder GIF zusammenfügen, QR-Codes
+erzeugen und auslesen, dazu Normal-/Specular-Maps und Noise-Maps – mit einer einzigen,
 simplen Oberfläche. Datei reinziehen, Zielformat klicken, fertig. Alles läuft **lokal auf
 deinem Rechner**, ohne Uploads und ohne Telemetrie.
 
@@ -31,10 +32,12 @@ Dateien werden nie überschrieben (`Urlaub (1).mp4`).
 | **GIF-Export** | gif | Schneiden, FPS, Breite, Farbanzahl, Dithering, Wiederholung (optimierte Palette) |
 | **Animiertes GIF** | **webm**, mp4, mkv, mov, avi | **Transparenz bleibt in WebM erhalten** (VP9 mit Alphakanal), Schneiden, Auflösung, Qualität, FPS |
 | **Audio**: mp3, wav, flac, ogg, opus, m4a, aac, aiff, wma | mp3, wav, flac, ogg, opus, m4a, aiff | **Lautheit normalisieren (EBU R128, zwei Durchläufe)**, Bitrate, Abtastrate, Mono/Stereo, Ein-/Ausblenden, Schneiden, Cover bleibt erhalten |
-| **Bild**: png, jpg, webp, avif, heic, bmp, tiff, gif, ico, tga | png, jpg, webp, avif, heic, bmp, tiff, gif, ico, **pdf** | Größe ändern, Qualität, verlustfrei, **PNG mit weniger Farben** (256 … 2, mit Dithering, deutlich kleiner), EXIF/GPS entfernen, Drehung laut EXIF, Hintergrund für Transparenz, Animationen bleiben erhalten |
+| **Bild**: png, jpg, webp, avif, heic, bmp, tiff, gif, ico, tga | png, jpg, webp, avif, heic, bmp, tiff, gif, ico, **pdf** | **Mehrere Bilder → ein GIF oder ein PDF** (Dauer pro Bild, Wiederholung), Größe ändern, Qualität, verlustfrei, **PNG mit weniger Farben** (256 … 2, mit Dithering, deutlich kleiner), EXIF/GPS entfernen, Drehung laut EXIF, Hintergrund für Transparenz, Animationen bleiben erhalten |
 | **Textur**: jedes Bild oben | **Normal-Map**, **Specular-Map** (PNG, z. B. `stein_normal.png`) | Stärke, Glättung, Höhe umkehren, OpenGL/DirectX, nahtlos kachelbar; Specular mit Helligkeit/Kontrast, umgekehrt als Roughness-Map |
 | **3D-Modell**: obj, glb, gltf, fbx, stl, ply | obj, glb, gltf, fbx, stl, ply | Skalierung (cm/m/mm/Zoll), Oben-Achse Y↔Z, OBJ mit `.mtl` und Texturen, glTF als eine Datei; FBX über Blender (Animationen bleiben bei FBX ↔ GLB erhalten) |
 | **QR-Code**: Link oder Text (eintippen, einfügen oder reinziehen), txt, md, vCard (vcf), Verknüpfungen (url, webloc) | PNG, SVG | Fehlerkorrektur, Größe, Farben, transparenter Hintergrund. Aus Dateien wird der Inhalt kodiert (bis ca. 2,9 KB), aus Verknüpfungen die Adresse |
+| **QR-Code auslesen**: jedes Bild oben (Foto, Screenshot) | Text („Inhalt lesen“, z. B. `plakat_qr.txt`) | Die Vorschau markiert den Code und zeigt den Inhalt zum Kopieren; mehrere Codes und gängige Barcodes (EAN, Data Matrix, …) werden ebenfalls gelesen |
+| **PDF** | png, jpg, webp, pdf | **Seiten als Bilder** (Auflösung 72–600 dpi, mehrere Seiten landen in einem Ordner), **Seiten auswählen** (`1-3, 5`), **jede Seite als eigene PDF**, **PDFs und Bilder zu einem PDF zusammenfügen** |
 | **Noise-Map** (ohne Quelldatei) | png, jpg, webp, bmp, tiff | **Seed** (gleicher Seed = gleiches Bild, 🎲 würfelt), Wolken, Perlin, Gebirge, Zellen, weißes Rauschen, Größe, Strukturgröße, Detailstufen, nahtlos kachelbar, Farbverlauf |
 | **Dokument**: md, html, docx, odt, epub, rst, tex, rtf, txt, doc | pdf, docx, odt, rtf, txt, md, html, epub, tex | Markdown → PDF über Pandoc + LibreOffice |
 | **Tabelle**: xlsx, xls, ods, csv, tsv | xlsx, ods, csv, tsv, pdf, json, yaml, toml | Trennzeichen erkennen, Excel-kompatibles CSV, Tabellenblatt wählen |
@@ -43,7 +46,10 @@ Dateien werden nie überschrieben (`Urlaub (1).mp4`).
 
 Mehrere Dateien auf einmal (Drag & Drop oder Mehrfachauswahl im Kontextmenü) werden
 nacheinander umgewandelt, z. B. MP3, WAV und FLAC gemeinsam nach Opus. Angeboten werden dann
-nur die Zielformate, die für alle Dateien passen.
+nur die Zielformate, die für alle Dateien passen. Bei **GIF** und **PDF** landen mehrere
+Bilder (und PDFs) standardmäßig **in einer einzigen Datei**, sortiert nach Dateiname
+(`scan 2` vor `scan 10`). Wer lieber eine Datei pro Bild möchte, nimmt den Haken bei „Zu einer
+Datei zusammenfügen“ heraus.
 
 QR-Codes und Noise-Maps brauchen keine Datei: Auf der Startseite gibt es ein Feld für Link oder
 Text (Strg+V oder ein Link aus dem Browser tun es auch) und den Knopf „Noise-Map erzeugen“.
@@ -93,8 +99,8 @@ versteht auch das AppImage die CLI-Optionen, z. B. `./OmniConverter-*.AppImage -
 
 ### Externe Programme
 
-Bilder, Daten, QR-Codes, Textur- und Noise-Maps sowie OBJ, glTF/GLB, STL und PLY funktionieren
-sofort. Für Video/Audio, Dokumente, Office-Formate und FBX nutzt OmniConverter bereits
+Bilder, PDFs, Daten, QR-Codes (erzeugen und auslesen), Textur- und Noise-Maps sowie OBJ,
+glTF/GLB, STL und PLY funktionieren sofort. Für Video/Audio, Dokumente, Office-Formate und FBX nutzt OmniConverter bereits
 installierte Programme und findet sie automatisch. Fehlt eines, sind
 die passenden Formate ausgegraut, und ein Hinweis zeigt, wie man es installiert.
 
@@ -133,7 +139,7 @@ Während der Umwandlung kocht eine Eule, danach freut sich eine Eule mit Brille.
 „← Zurück zu den Optionen“ geht es danach mit derselben Datei weiter, etwa um ein anderes
 Format oder andere Einstellungen auszuprobieren, ohne sie neu zu öffnen.
 
-**Vorschau:** Bei Bildern, Textur- und Noise-Maps, QR-Codes und Videos erscheint rechts neben
+**Vorschau:** Bei Bildern, PDFs, Textur- und Noise-Maps, QR-Codes und Videos erscheint rechts neben
 den Optionen eine Vorschau, die jeder Änderung folgt:
 
 * **Bilder** zeigen das echte Ergebnis mit genauer Dateigröße, also auch JPEG-Artefakte oder
@@ -143,6 +149,9 @@ den Optionen eine Vorschau, die jeder Änderung folgt:
   Schieberegler. Bis 10 s läuft er in Echtzeit, längere Ausschnitte als Zeitraffer mit dem
   exakten ersten und letzten Bild. Beim GIF-Export ist die Vorschau das echte GIF mit Farben,
   Dithering und Bildrate, die Dateigröße wird hochgerechnet.
+* **Zusammengefügte Bilder** zeigen das fertige GIF (abspielbar) bzw. die erste PDF-Seite mit
+  Seitenzahl, **PDFs** die erste gewählte Seite, **„Inhalt lesen“** das Bild mit markiertem
+  Code und darunter den Text.
 * Audio, Dokumente, Tabellen, Daten und 3D-Modelle haben keine Vorschau.
 
 ### Kontextmenü
@@ -171,6 +180,13 @@ omniconvert screenshot.png --to png -s colors=64    # Palette: deutlich kleinere
 omniconvert bericht.md --to pdf
 omniconvert *.png --to webp -o ./webp/          # mehrere Dateien → Ordner
 omniconvert *.mp3 *.wav *.flac --to opus         # gemischte Formate in ein Ziel
+omniconvert foto*.jpg --to gif -s frame_ms=800   # alle Bilder → ein GIF
+omniconvert scan*.png anhang.pdf --to pdf        # Bilder und PDFs → ein PDF
+omniconvert *.png --to pdf -s combine=no         # ein PDF pro Bild
+omniconvert bericht.pdf --to png -s dpi=300      # jede Seite als Bild → Ordner bericht/
+omniconvert bericht.pdf --to pdf -s pages=2-4    # nur diese Seiten
+omniconvert bericht.pdf --to pdf -s split=yes    # jede Seite als eigene PDF
+omniconvert plakat.jpg --to qr-text              # QR-Code auslesen → plakat_qr.txt
 omniconvert animation.gif --to webm              # Transparenz bleibt erhalten
 omniconvert stein.jpg --to normal-map -s strength=40 -s convention=directx
 omniconvert stein.jpg --to specular-map -s invert=yes   # Roughness-Map
@@ -191,6 +207,7 @@ Zeiten gehen als `90`, `1:30` oder `0:01:30.5`. Wichtige Optionen:
 | Video → Video | `start`, `end`, `resolution` (original, 2160, 1440, 1080, 720, 480, 360, custom) + `width`, `quality` (high, medium, small), `fps`, `fast` (umpacken ohne Neukodierung), `remove_audio`, `normalize`, `strip_metadata` |
 | → GIF | `start`, `end`, `fps`, `width`, `colors` (2–256), `dither` (sierra2_4a, floyd_steinberg, bayer, none), `loop` (forever, once) |
 | → Audio | `start`, `end`, `bitrate`, `normalize` (off, streaming = −14 LUFS, podcast = −16, broadcast = −23), `sample_rate`, `channels` (mono, stereo), `fade_in`, `fade_out`, `flac_level`, `strip_metadata` |
+| mehrere Dateien → GIF/PDF | `combine` (yes, no); beim GIF zusätzlich `frame_ms` (20–60000), `loop` (forever, once) |
 | Bild | `resize` (original, percent, fit) + `percent` / `max_width` / `max_height`, `quality`, `lossless`, `colors` (all, 256, 128, 64, 32, 16, 8, 4, 2; nur PNG) + `dither` (floyd_steinberg, none), `background`, `strip_metadata` |
 | Daten/Tabellen | `delimiter` (comma, semicolon, tab), `excel_bom`, `sheet`, `indent`, `detect_numbers` |
 | Pandoc | `allow_resources` (lokale Bilder einbinden, Netzwerk bleibt blockiert) |
@@ -198,6 +215,8 @@ Zeiten gehen als `90`, `1:30` oder `0:01:30.5`. Wichtige Optionen:
 | → `normal-map` | `strength` (1–100), `blur` (0–20 px), `invert`, `convention` (opengl, directx), `seamless` |
 | → `specular-map` | `brightness` (−100–100 %), `contrast` (0–400 %), `invert` (Roughness-Map) |
 | 3D-Modell | `scale` (none, cm_to_m, m_to_cm, mm_to_m, m_to_mm, inch_to_mm), `up_axis` (keep, y_to_z, z_to_y), `ascii` (STL/PLY) |
+| PDF → Bild | `pages` (leer = alle, z. B. `1-3, 5, 8-`), `dpi` (72, 150, 300, 600), `quality` (JPEG/WebP) |
+| PDF → PDF | `pages`, `split` (jede Seite als eigene Datei) |
 | → `qr` / `qr-svg` | `error_correction` (l, m, q, h), `size` (px, nur PNG), `dark`, `light`, `transparent`, `border` |
 | `--generate noise` | `kind` (fbm, perlin, ridged, worley, white), `seed`, `width`, `height`, `scale`, `octaves`, `roughness`, `seamless`, `color_low`, `color_high` |
 
@@ -217,7 +236,8 @@ Programm fehlt. Die Testmedien entstehen zur Laufzeit (FFmpeg `lavfi`, Pillow).
 src/omniconverter/
   core/          Qt-freier Kern: Formate, Options-Schema, Registry, Converter, Tools
   backends/      ffmpeg.py (+ ffmpeg_args.py), image.py, document.py, data.py,
-                 texture.py (Normal-/Specular-Maps), noise.py, qr.py,
+                 pdf.py (PDFium), texture.py (Normal-/Specular-Maps), noise.py,
+                 qr.py (erzeugen mit segno, auslesen mit zxing-cpp),
                  model3d.py (trimesh + Blender für FBX), preview.py (Vorschaubilder)
   gui/           PySide6-Oberfläche (Seiten, dynamisches Options-Formular, Vorschau,
                  Worker)
@@ -255,10 +275,14 @@ Umwandlung an, gewinnt das mit der höchsten Priorität, dessen Programme instal
 Ziele, die ein Bild einer bestimmten Art erzeugen (Normal-Map, QR-Code), sind eigene Formate
 mit `detect=False` und einem Namenszusatz (`_normal`). Quellen ohne Datei (Link/Text, Noise)
 gehören zur Kategorie `generator`, und ihr Backend benennt das Ergebnis über `output_stem()`.
+Kann ein Backend mehrere Dateien zu einer verbinden, meldet es das über `can_combine()` und
+`combine()`; GUI und CLI bieten dann von selbst „Zu einer Datei zusammenfügen“ an. Ergebnisse
+aus mehreren Dateien (Seiten einer PDF) entstehen als Ordner über `writes_folder()`.
 
 ## Ideen für später
 
-Videovorschau mit Schnitt-Regler, Hardware-Encoding, PDF → Bilder/Text, SVG, Untertitel,
+Videovorschau mit Schnitt-Regler, Hardware-Encoding, PDF → Text, QR-Code aus der
+Zwischenablage (Screenshot) lesen, Reihenfolge beim Zusammenfügen ändern, SVG, Untertitel,
 Presets, optional mitgeliefertes FFmpeg, signierte Windows-Pakete, Flatpak, modernes
 Windows-11-Kontextmenü, macOS.
 
@@ -272,5 +296,8 @@ unverändert in `src/omniconverter/resources/emotes/`.
 ## Lizenz
 
 MIT – siehe [LICENSE](LICENSE). Ausgenommen sind die Eulen-Emotes (CC BY 4.0, siehe
-Credits). OmniConverter ruft FFmpeg, Pandoc, LibreOffice und Blender als eigenständige
+Credits). PDFs liest und schreibt OmniConverter mit [PDFium](https://pdfium.googlesource.com/pdfium/)
+über [pypdfium2](https://github.com/pypdfium2-team/pypdfium2) (Apache 2.0 / BSD-3-Clause),
+QR-Codes und Barcodes liest es mit [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp)
+(Apache 2.0). Beide sind freizügig lizenziert und laufen lokal im Programm. OmniConverter ruft FFmpeg, Pandoc, LibreOffice und Blender als eigenständige
 Programme auf und liefert sie nicht mit. Es gelten deren eigene Lizenzen.

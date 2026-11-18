@@ -16,7 +16,8 @@ def default_backends() -> list[Backend]:
     from omniconverter.backends.image import ImageBackend
     from omniconverter.backends.model3d import BlenderBackend, MeshBackend
     from omniconverter.backends.noise import NoiseBackend
-    from omniconverter.backends.qr import QRBackend
+    from omniconverter.backends.pdf import PdfBackend
+    from omniconverter.backends.qr import QRBackend, QRReadBackend
     from omniconverter.backends.texture import TextureBackend
 
     return [
@@ -26,6 +27,8 @@ def default_backends() -> list[Backend]:
         TextureBackend(),
         NoiseBackend(),
         QRBackend(),
+        QRReadBackend(),
+        PdfBackend(),
         MeshBackend(),
         BlenderBackend(),
         LibreOfficeBackend(),

@@ -24,6 +24,8 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "category.model": ("3D-Modell", "3D model"),
     "category.generator": ("Erzeugt", "Generated"),
     # --- errors ---
+    # --- formats with a translated label ---
+    "format.qr_text": ("Inhalt lesen", "Read content"),
     "error.tool_missing": ("{tool} ist nicht installiert.", "{tool} is not installed."),
     "error.not_a_file": ("Datei nicht gefunden: {path}", "File not found: {path}"),
     "error.unknown_format": (
@@ -92,6 +94,27 @@ MESSAGES: dict[str, tuple[str, str]] = {
         "Der QR-Code konnte nicht gespeichert werden.",
         "Could not save the QR code.",
     ),
+    "error.qr_none": (
+        "Im Bild wurde kein QR-Code (oder Barcode) gefunden.",
+        "No QR code (or barcode) found in the picture.",
+    ),
+    "error.qr_reader_missing": (
+        "Der QR-Code-Leser (zxing-cpp) fehlt in dieser Installation.",
+        "The QR code reader (zxing-cpp) is missing from this installation.",
+    ),
+    "error.pdf_failed": (
+        "Die PDF-Datei konnte nicht gelesen werden (beschädigt oder mit Passwort geschützt).",
+        "Could not read the PDF (damaged or protected with a password).",
+    ),
+    "error.pages_invalid": (
+        "Unverständliche Seitenangabe „{text}“ (z. B. 1-3, 5).",
+        "Cannot understand the pages “{text}” (e.g. 1-3, 5).",
+    ),
+    "error.pages_range": (
+        "Seiten „{text}“ gibt es nicht, die PDF hat {n} Seite(n).",
+        "Pages “{text}” do not exist, the PDF has {n} page(s).",
+    ),
+    "error.folder_exists": ("„{path}“ existiert bereits.", "“{path}” already exists."),
     "error.model_failed": (
         "Das 3D-Modell konnte nicht umgewandelt werden.",
         "Could not convert the 3D model.",
@@ -157,6 +180,36 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "opt.loop": ("Wiederholen", "Loop"),
     "opt.loop.forever": ("Endlos", "Forever"),
     "opt.loop.once": ("Einmal abspielen", "Play once"),
+    "opt.combine": ("Zu einer Datei zusammenfügen", "Join into one file"),
+    "opt.combine_help": (
+        "Alle Dateien landen in einer Datei, sortiert nach Dateiname. Aus: jede Datei wird "
+        "einzeln umgewandelt.",
+        "All files go into one file, sorted by file name. Off: each file is converted on its "
+        "own.",
+    ),
+    "opt.frame_ms": ("Dauer pro Bild", "Time per picture"),
+    "opt.frame_ms_help": (
+        "Wie lange jedes Bild zu sehen ist. Animierte GIFs behalten ihr eigenes Tempo.",
+        "How long each picture is shown. Animated GIFs keep their own timing.",
+    ),
+    "opt.pages": ("Seiten", "Pages"),
+    "opt.pages_help": ("alle – oder z. B. 1-3, 5, 8-", "all – or e.g. 1-3, 5, 8-"),
+    "opt.split": ("Jede Seite als eigene PDF", "Each page as its own PDF"),
+    "opt.split_help": (
+        "Die Seiten landen einzeln in einem Ordner, benannt nach der PDF.",
+        "The pages are saved one by one in a folder named after the PDF.",
+    ),
+    "opt.dpi": ("Auflösung", "Resolution"),
+    "opt.dpi_help": (
+        "Bildpunkte pro Zoll. Eine A4-Seite hat bei 150 dpi 1240×1754 Pixel. Mehrere Seiten "
+        "landen einzeln in einem Ordner, benannt nach der PDF.",
+        "Pixels per inch. An A4 page is 1240×1754 pixels at 150 dpi. Several pages are saved "
+        "one by one in a folder named after the PDF.",
+    ),
+    "opt.dpi.72": ("72 dpi (Bildschirm, klein)", "72 dpi (screen, small)"),
+    "opt.dpi.150": ("150 dpi (gut lesbar)", "150 dpi (easy to read)"),
+    "opt.dpi.300": ("300 dpi (Druck)", "300 dpi (print)"),
+    "opt.dpi.600": ("600 dpi (sehr fein, groß)", "600 dpi (very fine, large)"),
     "opt.keep_transparency": ("Transparenz erhalten", "Keep transparency"),
     "opt.keep_transparency_help": (
         "Durchsichtige Stellen bleiben durchsichtig (VP9 mit Alphakanal, z. B. für Webseiten "
@@ -333,6 +386,13 @@ MESSAGES: dict[str, tuple[str, str]] = {
     # --- preview ---
     "preview.scaled": ("Vorschau verkleinert", "Scaled-down preview"),
     "preview.pages": ("{n} Seiten", "{n} pages"),
+    "preview.images": ("{n} Bilder", "{n} pictures"),
+    "preview.files": ("{n} Dateien", "{n} files"),
+    "preview.first_of": (
+        "erste von {n} Seiten, je eine Datei",
+        "first of {n} pages, one file each",
+    ),
+    "preview.codes": ("{n} Codes gefunden:", "{n} codes found:"),
     "preview.timelapse": ("Zeitraffer", "Time-lapse"),
     "preview.first_seconds": ("Vorschau der ersten {s} s", "Preview of the first {s} s"),
     "preview.fast_cut": (
