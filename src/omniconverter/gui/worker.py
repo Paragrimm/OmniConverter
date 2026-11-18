@@ -22,7 +22,7 @@ class Job:
     options: dict[str, Any] = field(default_factory=dict)
     output: Path | None = None  # explicit file; otherwise computed right before converting
     output_dir: Path | None = None  # folder for computed names (None = next to the source)
-    combine: list[SourceFile] = field(default_factory=list)  # join these into one file
+    combine: list[SourceFile] = field(default_factory=list)  # join these, in this order
 
 
 class ConversionWorker(QThread):
@@ -51,7 +51,7 @@ class ConversionWorker(QThread):
             try:
                 if job.combine:
                     output = job.output or self.converter.combined_output_path(
-                        job.combine, job.target)
+                        job.combine, job.target, in_order=True)
                 else:
                     output = job.output or self.converter.output_path(
                         job.source, job.target, job.options, job.output_dir)
@@ -66,7 +66,7 @@ class ConversionWorker(QThread):
                 if job.combine:
                     result = self.converter.combine(job.combine, job.target, output,
                                                     job.options, on_progress=report,
-                                                    cancel=self._cancel)
+                                                    cancel=self._cancel, in_order=True)
                 else:
                     result = self.converter.convert(job.source, job.target, output,
                                                     job.options, on_progress=report,

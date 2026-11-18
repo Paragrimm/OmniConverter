@@ -25,6 +25,16 @@ def is_portable() -> bool:
     return is_frozen() and (app_dir() / PORTABLE_MARKER).is_file()
 
 
+def licenses_path() -> Path | None:
+    """Where the license texts of this build are: ``licenses/`` of a package, or the overview
+    in a source checkout. ``None`` if neither exists (e.g. installed with pip)."""
+    if is_frozen():
+        folder = app_dir() / "licenses"
+        return folder if folder.is_dir() else None
+    notices = Path(__file__).resolve().parent.parent.parent / "THIRD-PARTY-NOTICES.md"
+    return notices if notices.is_file() else None
+
+
 def appimage_path() -> str | None:
     """Path of the running ``.AppImage`` file – stable, unlike its temporary mount point."""
     path = os.environ.get("APPIMAGE")

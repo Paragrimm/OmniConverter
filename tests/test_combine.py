@@ -103,3 +103,12 @@ def test_combine_order_uses_file_names(converter, pictures):
     sources = [converter.inspect(p) for p in pictures]
     assert [s.path.name for s in combine_order(sources)] == ["scan_1.png", "scan_2.jpg",
                                                               "scan_10.png"]
+
+
+def test_join_in_the_given_order(converter, pictures, tmp_path):
+    sources = [converter.inspect(p) for p in pictures]  # scan_10, scan_2, scan_1
+    out = converter.combine(sources, get_format("gif"), tmp_path / "given.gif", in_order=True)
+    with Image.open(out) as im:
+        assert im.convert("RGB").getpixel((20, 30))[2] > 200  # scan_10 (blue) first
+    assert converter.combined_output_path(sources, get_format("pdf"), in_order=True) == (
+        tmp_path / "scan.pdf")

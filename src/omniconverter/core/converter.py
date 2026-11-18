@@ -185,16 +185,19 @@ class Converter:
         return opts.parse_bool(raw, COMBINE)
 
     def combined_output_path(self, sources: Sequence[SourceFile], target: Format,
-                             directory: Path | None = None) -> Path:
-        """Next to the first file (in name order), named after what the names share."""
-        ordered = combine_order(sources)
+                             directory: Path | None = None, *, in_order: bool = False) -> Path:
+        """Next to the first file, named after what the names share.
+
+        The first file is the first by name, or with *in_order* the first one given.
+        """
+        ordered = list(sources) if in_order else combine_order(sources)
         first = ordered[0].path
         assert first is not None
         stem = shared_stem([s.path.stem for s in ordered if s.path]) or first.stem
         return unique_path((directory or first.parent) / f"{stem}.{target.extension}")
 
     def _combine_requests(self, sources: Sequence[SourceFile], target: Format,
-                          raw_options: Mapping[str, Any] | None
+                          raw_options: Mapping[str, Any] | None, in_order: bool
                           ) -> tuple[Backend, list[ConversionRequest]]:
         backend = self.combiner(sources, target)
         if backend is None:
@@ -204,15 +207,18 @@ class Converter:
         values = opts.resolve(schema, {k: v for k, v in (raw_options or {}).items()
                                        if k in known})
         requests = [ConversionRequest(s.path, s.format, target, values, s.media)
-                    for s in combine_order(sources)]
+                    for s in (sources if in_order else combine_order(sources))]
         return backend, requests
 
     def combine(self, sources: Sequence[SourceFile], target: Format, output: str | Path,
                 raw_options: Mapping[str, Any] | None = None, *,
                 on_progress: ProgressCallback | None = None,
-                cancel: threading.Event | None = None) -> Path:
-        """Join *sources* (in name order) into the single file *output* (atomically)."""
-        backend, requests = self._combine_requests(sources, target, raw_options)
+                cancel: threading.Event | None = None, in_order: bool = False) -> Path:
+        """Join *sources* into the single file *output* (atomically).
+
+        The files are joined in name order, or with *in_order* in the order given.
+        """
+        backend, requests = self._combine_requests(sources, target, raw_options, in_order)
         out = Path(output).expanduser().resolve()
         if any(r.source == out for r in requests):
             raise ConversionError(t("error.same_file"))
@@ -221,8 +227,9 @@ class Converter:
 
     def preview_combined(self, sources: Sequence[SourceFile], target: Format,
                          raw_options: Mapping[str, Any] | None, work_dir: Path, *,
-                         cancel: threading.Event | None = None) -> Preview:
-        backend, requests = self._combine_requests(sources, target, raw_options)
+                         cancel: threading.Event | None = None,
+                         in_order: bool = False) -> Preview:
+        backend, requests = self._combine_requests(sources, target, raw_options, in_order)
         return backend.preview_combined(
             requests, ConversionContext(self.locator, Path(work_dir), cancel))
 

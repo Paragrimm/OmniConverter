@@ -78,6 +78,11 @@ def main() -> int:
     env_note = os.environ.get("APPIMAGE_EXTRACT_AND_RUN")
     print(f"Testing {exe}" + (" (APPIMAGE_EXTRACT_AND_RUN=1)" if env_note else ""))
 
+    bundle = Path(exe).resolve().parent  # also through the .deb's /usr/bin symlink
+    if (bundle / "_internal").is_dir() or (bundle / "base_library.zip").exists():
+        notices = bundle / "licenses" / "THIRD-PARTY-NOTICES.md"
+        check("license texts are bundled", notices.is_file()
+              and any((bundle / "licenses").glob("pypdfium2-*")), str(bundle / "licenses"))
     result = run(cmd, "--version")
     check("--version", result.returncode == 0, result.stdout.strip() or result.stderr.strip())
     result = run(cmd, "--tools")

@@ -47,9 +47,11 @@ Dateien werden nie überschrieben (`Urlaub (1).mp4`).
 Mehrere Dateien auf einmal (Drag & Drop oder Mehrfachauswahl im Kontextmenü) werden
 nacheinander umgewandelt, z. B. MP3, WAV und FLAC gemeinsam nach Opus. Angeboten werden dann
 nur die Zielformate, die für alle Dateien passen. Bei **GIF** und **PDF** landen mehrere
-Bilder (und PDFs) standardmäßig **in einer einzigen Datei**, sortiert nach Dateiname
-(`scan 2` vor `scan 10`). Wer lieber eine Datei pro Bild möchte, nimmt den Haken bei „Zu einer
-Datei zusammenfügen“ heraus.
+Bilder (und PDFs) standardmäßig **in einer einzigen Datei**. Die Reihenfolge zeigt eine
+kleine Liste unter den Optionen: anfangs nach Dateiname sortiert (`scan 2` vor `scan 10`),
+umsortieren per Ziehen oder mit ▲/▼. Die Vorschau folgt sofort. Wer lieber eine Datei pro Bild
+möchte, nimmt den Haken bei „Zu einer Datei zusammenfügen“ heraus. In der Kommandozeile gilt
+die Reihenfolge nach Dateiname.
 
 QR-Codes und Noise-Maps brauchen keine Datei: Auf der Startseite gibt es ein Feld für Link oder
 Text (Strg+V oder ein Link aus dem Browser tun es auch) und den Knopf „Noise-Map erzeugen“.
@@ -252,7 +254,11 @@ Windows entstehen die portable ZIP und der Installer (braucht [Inno Setup](https
 unter Linux tar.gz, AppImage und `.deb`, alles in `dist/release/`. `python
 packaging/smoke_test.py <programm>` prüft ein gebautes Paket mit echten Umwandlungen. Die
 CI baut und prüft alle Pakete bei jedem Pull Request, inklusive stiller Installation und
-Deinstallation unter Windows.
+Deinstallation unter Windows. Jedes Paket bekommt einen Ordner `licenses/` mit den
+Lizenztexten aller mitgelieferten Komponenten; `packaging/licenses.py` sammelt sie aus den
+installierten Wheels und bricht ab, wenn für eine Abhängigkeit kein Lizenztext gefunden wird.
+Eine neue Abhängigkeit gehört außerdem in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
+(ein Test prüft das).
 
 **Release veröffentlichen:** Das geht ohne lokalen Checkout, direkt auf GitHub:
 
@@ -282,7 +288,7 @@ aus mehreren Dateien (Seiten einer PDF) entstehen als Ordner über `writes_folde
 ## Ideen für später
 
 Videovorschau mit Schnitt-Regler, Hardware-Encoding, PDF → Text, QR-Code aus der
-Zwischenablage (Screenshot) lesen, Reihenfolge beim Zusammenfügen ändern, SVG, Untertitel,
+Zwischenablage (Screenshot) lesen, SVG, Untertitel,
 Presets, optional mitgeliefertes FFmpeg, signierte Windows-Pakete, Flatpak, modernes
 Windows-11-Kontextmenü, macOS.
 
@@ -295,9 +301,18 @@ unverändert in `src/omniconverter/resources/emotes/`.
 
 ## Lizenz
 
-MIT – siehe [LICENSE](LICENSE). Ausgenommen sind die Eulen-Emotes (CC BY 4.0, siehe
-Credits). PDFs liest und schreibt OmniConverter mit [PDFium](https://pdfium.googlesource.com/pdfium/)
-über [pypdfium2](https://github.com/pypdfium2-team/pypdfium2) (Apache 2.0 / BSD-3-Clause),
-QR-Codes und Barcodes liest es mit [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp)
-(Apache 2.0). Beide sind freizügig lizenziert und laufen lokal im Programm. OmniConverter ruft FFmpeg, Pandoc, LibreOffice und Blender als eigenständige
-Programme auf und liefert sie nicht mit. Es gelten deren eigene Lizenzen.
+Der Quellcode von OmniConverter steht unter der MIT-Lizenz – siehe [LICENSE](LICENSE).
+Ausgenommen sind die Eulen-Emotes (CC BY 4.0, siehe Credits).
+
+Die fertigen Pakete enthalten zusätzlich Bibliotheken von Drittanbietern, u. a. Qt/PySide6
+(LGPL-3.0), Pillow, [PDFium](https://pdfium.googlesource.com/pdfium/) über
+[pypdfium2](https://github.com/pypdfium2-team/pypdfium2) (Apache 2.0 / BSD-3-Clause) und
+[zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) (Apache 2.0). Die Übersicht mit Lizenzen und
+Quellen steht in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), die vollständigen Texte liegen
+in jedem Paket im Ordner `licenses/` und sind in den Einstellungen (⚙ → „Lizenzen von
+Drittanbietern“) verlinkt. Weil die HEIC-Unterstützung (pillow-heif) den Encoder x265 unter der
+GPL-2.0 mitbringt, gelten für die fertigen Pakete als Ganzes zusätzlich die Bedingungen der
+GPL-2.0; alle Quellen sind frei verfügbar.
+
+OmniConverter ruft FFmpeg, Pandoc, LibreOffice und Blender als eigenständige Programme auf und
+liefert sie nicht mit. Es gelten deren eigene Lizenzen.

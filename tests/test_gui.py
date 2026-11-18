@@ -555,3 +555,36 @@ def test_reading_a_qr_code_shows_what_it_says(window, qtbot, tmp_path):
     qtbot.waitUntil(lambda: window.stack.currentWidget() is window.result_page, timeout=10000)
     assert (tmp_path / "flyer_qr.txt").read_text(encoding="utf-8").strip() == (
         "https://example.com/<b>owl</b>")
+
+
+def test_order_of_joined_files_can_be_changed(window, qtbot, tmp_path):
+    paths = []
+    for name, color in (("b 10.png", "blue"), ("b 2.png", "lime"), ("b 1.png", "red")):
+        path = tmp_path / name
+        Image.new("RGB", (16, 16), color).save(path)
+        paths.append(str(path))
+    window.open_files(paths)
+    page = window.config_page
+    target_button(window, "jpg").click()
+    assert not page.order_list.isVisibleTo(page)  # nothing is joined
+    target_button(window, "gif").click()
+    qtbot.waitUntil(lambda: page.order_list.isVisibleTo(page))
+    assert [s.path.name for s in page.ordered_sources()] == ["b 1.png", "b 2.png", "b 10.png"]
+    order = page.order_list
+    order.list.setCurrentRow(2)
+    assert not order.down.isEnabled()
+    order.move(-1)
+    order.move(-1)  # b 10 first now
+    assert [s.path.name for s in page.ordered_sources()] == ["b 10.png", "b 1.png", "b 2.png"]
+    assert not order.up.isEnabled()
+    page.form.widget("combine").setChecked(False)
+    qtbot.waitUntil(lambda: not page.order_list.isVisibleTo(page))
+    page.form.widget("combine").setChecked(True)
+    page.convert_button.click()
+    qtbot.waitUntil(lambda: window.stack.currentWidget() is window.result_page, timeout=10000)
+    with Image.open(window.result_page.outputs[0]) as im:
+        firsts = []
+        for index in range(3):
+            im.seek(index)
+            firsts.append(im.convert("RGB").getpixel((8, 8)))
+    assert firsts[0][2] > 200 and firsts[1][0] > 200 and firsts[2][1] > 200  # blue, red, lime

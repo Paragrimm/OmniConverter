@@ -22,3 +22,8 @@ Die Windows-Dateien sind (noch) nicht signiert. Die SmartScreen-Warnung lässt s
 `SHA256SUMS.txt`.
 
 Die Linux-Pakete laufen ab glibc 2.35 (Ubuntu 22.04, Debian 12, Fedora 36 und neuer).
+
+Lizenzen: OmniConverter selbst steht unter MIT. Die Pakete enthalten Bibliotheken von
+Drittanbietern (u. a. Qt/LGPL-3.0, PDFium, zxing-cpp, x265/GPL-2.0 für HEIC); ihre Lizenztexte
+liegen im Ordner `licenses/`, die Übersicht steht in
+[THIRD-PARTY-NOTICES.md](https://github.com/Paragrimm/OmniConverter/blob/main/THIRD-PARTY-NOTICES.md).

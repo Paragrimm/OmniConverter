@@ -182,10 +182,10 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "opt.loop.once": ("Einmal abspielen", "Play once"),
     "opt.combine": ("Zu einer Datei zusammenfügen", "Join into one file"),
     "opt.combine_help": (
-        "Alle Dateien landen in einer Datei, sortiert nach Dateiname. Aus: jede Datei wird "
-        "einzeln umgewandelt.",
-        "All files go into one file, sorted by file name. Off: each file is converted on its "
-        "own.",
+        "Alle Dateien landen in einer Datei, in der Reihenfolge der Liste (anfangs nach "
+        "Dateiname). Aus: jede Datei wird einzeln umgewandelt.",
+        "All files go into one file, in the order of the list (by file name at first). Off: "
+        "each file is converted on its own.",
     ),
     "opt.frame_ms": ("Dauer pro Bild", "Time per picture"),
     "opt.frame_ms_help": (
@@ -417,6 +417,13 @@ MESSAGES: dict[str, tuple[str, str]] = {
     ),
     "gui.back": ("Zurück", "Back"),
     "gui.n_files": ("{n} Dateien", "{n} files"),
+    "gui.order": ("Reihenfolge", "Order"),
+    "gui.order_hint": (
+        "Ziehen oder mit ▲/▼ verschieben. Anfangs nach Dateiname sortiert.",
+        "Drag, or move with ▲/▼. Sorted by file name at first.",
+    ),
+    "gui.move_up": ("Nach oben", "Move up"),
+    "gui.move_down": ("Nach unten", "Move down"),
     "gui.convert_to": ("Umwandeln in", "Convert to"),
     "gui.needs_tool": ("Benötigt {tools}. Installieren mit:", "Needs {tools}. Install with:"),
     "gui.missing_hint": (
@@ -484,6 +491,7 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "gui.settings.menu_off": ("Nicht eingerichtet.", "Not installed."),
     "gui.settings.menu_install": ("Einrichten", "Install"),
     "gui.settings.menu_remove": ("Entfernen", "Remove"),
+    "gui.settings.licenses": ("Lizenzen von Drittanbietern", "Third-party licenses"),
     "gui.settings.privacy": (
         "Datenschutz: Alle Umwandlungen laufen auf deinem Rechner. Es gibt keine Uploads, "
         "keine Telemetrie und keine Update-Abfragen; es wird kein Verlauf gespeichert.",

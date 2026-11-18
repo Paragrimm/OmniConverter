@@ -10,12 +10,17 @@ from pathlib import Path
 from PySide6.QtCore import QPoint, QRect, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QIcon, QMovie, QPixmap
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QFileDialog,
     QFrame,
+    QHBoxLayout,
     QLabel,
     QLayout,
     QLayoutItem,
+    QListWidget,
+    QListWidgetItem,
     QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -26,6 +31,79 @@ from omniconverter.runtime import child_env
 
 EMOTE_CREDIT_URL = "https://roamingowl.itch.io/owlish-emotes"
 EMOTE_CREDIT_HTML = f'Emotes by <a href="{EMOTE_CREDIT_URL}">RoamingOwl</a>'
+
+
+class OrderList(QWidget):
+    """A short list of files whose order can be changed by dragging or with ▲/▼."""
+
+    changed = Signal()
+    VISIBLE_ROWS = 5  # more rows scroll
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        self.list = QListWidget()
+        self.list.setObjectName("OrderList")
+        self.list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.list.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self.list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.list.setToolTip(t("gui.order_hint"))
+        self.list.model().rowsMoved.connect(lambda *_: self._moved())
+        self.list.currentRowChanged.connect(lambda _row: self._update_buttons())
+        layout.addWidget(self.list, 1)
+        buttons = QVBoxLayout()
+        buttons.setSpacing(2)
+        self.up = QToolButton()
+        self.down = QToolButton()
+        for button, arrow, key, step in ((self.up, Qt.ArrowType.UpArrow, "gui.move_up", -1),
+                                         (self.down, Qt.ArrowType.DownArrow, "gui.move_down", 1)):
+            button.setArrowType(arrow)
+            button.setToolTip(t(key))
+            button.setAccessibleName(t(key))
+            button.clicked.connect(lambda _=False, s=step: self.move(s))
+            buttons.addWidget(button)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+
+    def set_items(self, items: list[tuple[str, object]]) -> None:
+        """(label, value) pairs in their initial order."""
+        self.list.blockSignals(True)
+        self.list.clear()
+        for label, value in items:
+            item = QListWidgetItem(label)
+            item.setData(Qt.ItemDataRole.UserRole, value)
+            item.setToolTip(label)
+            self.list.addItem(item)
+        self.list.blockSignals(False)
+        rows = min(max(1, len(items)), self.VISIBLE_ROWS)
+        row_height = self.list.sizeHintForRow(0) if items else 20
+        self.list.setFixedHeight(rows * row_height + 2 * self.list.frameWidth() + 4)
+        self._update_buttons()
+
+    def values(self) -> list:
+        return [self.list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.list.count())]
+
+    def move(self, step: int) -> None:
+        """Move the selected file one place up (−1) or down (+1)."""
+        row = self.list.currentRow()
+        new = row + step
+        if row < 0 or not 0 <= new < self.list.count():
+            return
+        item = self.list.takeItem(row)
+        self.list.insertItem(new, item)
+        self.list.setCurrentRow(new)
+        self._moved()
+
+    def _moved(self) -> None:
+        self._update_buttons()
+        self.changed.emit()
+
+    def _update_buttons(self) -> None:
+        row = self.list.currentRow()
+        self.up.setEnabled(row > 0)
+        self.down.setEnabled(0 <= row < self.list.count() - 1)
 
 
 def app_icon() -> QIcon:

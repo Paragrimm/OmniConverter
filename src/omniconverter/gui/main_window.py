@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 
 from omniconverter import APP_NAME
 from omniconverter.config import Settings
-from omniconverter.core.converter import Converter, SourceFile, unique_path
+from omniconverter.core.converter import Converter, SourceFile, combine_order, unique_path
 from omniconverter.core.errors import ConversionError
 from omniconverter.core.formats import CATEGORY_ORDER, FORMATS, Category, Format, display_label
 from omniconverter.core.registry import TargetChoice
@@ -43,6 +43,7 @@ from omniconverter.gui.widgets import (
     DropArea,
     EmoteLabel,
     FlowLayout,
+    OrderList,
     app_icon,
     dropped_text,
     emote_credit,
@@ -211,6 +212,16 @@ class ConfigPage(QWidget):
         self.body_layout.addWidget(self.options_title)
         self.options_holder = QVBoxLayout()
         self.body_layout.addLayout(self.options_holder)
+        # Order of the files joined into one (only while joining).
+        self.order_title = QLabel(t("gui.order"))
+        self.order_title.setObjectName("Section")
+        self.order_list = OrderList()
+        self.order_list.changed.connect(self._update_output)
+        self.order_list.changed.connect(self._update_preview)
+        self.body_layout.addWidget(self.order_title)
+        self.body_layout.addWidget(self.order_list)
+        self.order_title.hide()
+        self.order_list.hide()
         self.body_layout.addStretch(1)
 
         outer.addWidget(hline())
@@ -253,6 +264,7 @@ class ConfigPage(QWidget):
         self._output_mode = self._mode()
         self.set_note(note)
         self.preview.clear()
+        self.order_list.set_items([(s.name, s) for s in combine_order(sources)])
         self._fill_header()
         self._fill_targets(choices)
         self._set_form(None)
@@ -397,6 +409,15 @@ class ConfigPage(QWidget):
                 and self.window_.converter.wants_combine(self.sources, self.target,
                                                          self._values()))
 
+    def ordered_sources(self) -> list[SourceFile]:
+        """The files in the order they are joined (by name until the user moves them)."""
+        return self.order_list.values()
+
+    def _update_order(self) -> None:
+        on = self.combining()
+        self.order_title.setVisible(on)
+        self.order_list.setVisible(on)
+
     def _mode(self) -> str:
         """``path``: one result, chosen as a file (or folder); ``dir``: the folder for many."""
         return "path" if len(self.sources) == 1 or self.combining() else "dir"
@@ -423,6 +444,7 @@ class ConfigPage(QWidget):
     # -- preview ------------------------------------------------------------------------------
 
     def _update_preview(self) -> None:
+        self._update_order()
         converter = self.window_.converter
         if not self.sources or self.target is None or not (
                 self.combining() or converter.can_preview(self.sources[0], self.target)):
@@ -440,7 +462,7 @@ class ConfigPage(QWidget):
         if self.combining():
             label = t("gui.n_files", n=len(self.sources))
             self.preview.request(self.sources[0], self.target, values, label,
-                                 combine=list(self.sources))
+                                 combine=self.ordered_sources())
             return
         label = self.sources[0].name if len(self.sources) > 1 else ""
         self.preview.request(self.sources[0], self.target, values, label)
@@ -461,7 +483,8 @@ class ConfigPage(QWidget):
         assert self.target is not None
         converter = self.window_.converter
         if self.combining():
-            return converter.combined_output_path(self.sources, self.target)
+            return converter.combined_output_path(self.ordered_sources(), self.target,
+                                                  in_order=True)
         source = self.sources[0]
         return converter.output_path(source, self.target, self._values(), default_dir(source))
 
@@ -508,7 +531,7 @@ class ConfigPage(QWidget):
         values = self.form.conversion_values() if self.form else {}
         if self.combining():
             return [Job(self.sources[0], self.target, values, output=self.custom_output,
-                        combine=list(self.sources))]
+                        combine=self.ordered_sources())]
         if len(self.sources) == 1:
             source = self.sources[0]
             return [Job(source, self.target, values, output=self.custom_output,

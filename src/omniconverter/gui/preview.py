@@ -71,7 +71,8 @@ class PreviewWorker(QThread):
         try:
             if self.combine:
                 preview = self.converter.preview_combined(self.combine, self.target,
-                                                          self.values, work, cancel=self._cancel)
+                                                          self.values, work, cancel=self._cancel,
+                                                          in_order=True)
             else:
                 preview = self.converter.preview(self.source, self.target, self.values, work,
                                                  cancel=self._cancel)
