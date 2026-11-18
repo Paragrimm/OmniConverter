@@ -109,7 +109,10 @@ def test_fbx_needs_blender(converter, model, monkeypatch):
 
 
 @needs_blender
-def test_fbx_round_trip_with_blender(converter, model, tmp_path):
+@pytest.mark.parametrize("fallback", [False, True], ids=["operators", "fallback"])
+def test_fbx_round_trip_with_blender(converter, model, tmp_path, monkeypatch, fallback):
+    # "fallback": the paths for Blender builds whose FBX operators lost options (Blender 5)
+    monkeypatch.setattr("omniconverter.backends.model3d._FORCE_FALLBACK", fallback)
     fbx = convert_verbose(converter, model, "fbx")
     assert fbx.read_bytes().startswith(b"Kaydara FBX Binary")
     assert extents(convert_verbose(converter, fbx, "glb")) == [1, 2, 3]
