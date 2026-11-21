@@ -178,6 +178,7 @@ omniconvert video.mov --to mp4
 omniconvert clip.mp4 --to gif -s start=0:05 -s end=0:12 -s width=640 -s colors=128
 omniconvert podcast.wav --to mp3 -s normalize=podcast -s bitrate=128
 omniconvert foto.heic --to jpg -s resize=fit -s max_width=1920 -s max_height=1080
+omniconvert icon.png --to png -s resize=exact -s width=98 -s height=98 -s resample=nearest
 omniconvert screenshot.png --to png -s colors=64    # Palette: deutlich kleineres PNG
 omniconvert bericht.md --to pdf
 omniconvert *.png --to webp -o ./webp/          # mehrere Dateien → Ordner
@@ -210,7 +211,7 @@ Zeiten gehen als `90`, `1:30` oder `0:01:30.5`. Wichtige Optionen:
 | → GIF | `start`, `end`, `fps`, `width`, `colors` (2–256), `dither` (sierra2_4a, floyd_steinberg, bayer, none), `loop` (forever, once) |
 | → Audio | `start`, `end`, `bitrate`, `normalize` (off, streaming = −14 LUFS, podcast = −16, broadcast = −23), `sample_rate`, `channels` (mono, stereo), `fade_in`, `fade_out`, `flac_level`, `strip_metadata` |
 | mehrere Dateien → GIF/PDF | `combine` (yes, no); beim GIF zusätzlich `frame_ms` (20–60000), `loop` (forever, once) |
-| Bild | `resize` (original, percent, fit) + `percent` / `max_width` / `max_height`, `quality`, `lossless`, `colors` (all, 256, 128, 64, 32, 16, 8, 4, 2; nur PNG) + `dither` (floyd_steinberg, none), `background`, `strip_metadata` |
+| Bild | `resize` (original, percent, fit, exact) + `percent` / `max_width` / `max_height` / `width` / `height` + `resample` (lanczos, bicubic, bilinear, nearest), `quality`, `lossless`, `colors` (all, 256, 128, 64, 32, 16, 8, 4, 2; nur PNG) + `dither` (floyd_steinberg, none), `background`, `strip_metadata` |
 | Daten/Tabellen | `delimiter` (comma, semicolon, tab), `excel_bom`, `sheet`, `indent`, `detect_numbers` |
 | Pandoc | `allow_resources` (lokale Bilder einbinden, Netzwerk bleibt blockiert) |
 | GIF → Video | `start`, `end`, `resolution` + `width`, `quality`, `fps`, `keep_transparency` (nur WebM) |

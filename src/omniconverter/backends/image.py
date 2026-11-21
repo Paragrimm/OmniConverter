@@ -64,13 +64,22 @@ class ImageBackend(Backend):
             Option("resize", t("opt.resize"), Kind.CHOICE, "original",
                    choices=(("original", t("opt.original")),
                             ("percent", t("opt.resize.percent")),
-                            ("fit", t("opt.resize.fit")))),
+                            ("fit", t("opt.resize.fit")),
+                            ("exact", t("opt.resize.exact")))),
             Option("percent", t("opt.percent"), Kind.INT, 50, minimum=1, maximum=1000,
                    suffix=" %", visible_if=when("resize", "percent")),
             Option("max_width", t("opt.max_width"), Kind.INT, 1920, minimum=1, maximum=65535,
                    suffix=" px", visible_if=when("resize", "fit")),
             Option("max_height", t("opt.max_height"), Kind.INT, 1080, minimum=1,
                    maximum=65535, suffix=" px", visible_if=when("resize", "fit")),
+            Option("width", t("opt.width"), Kind.INT, 1920, minimum=1, maximum=65535,
+                   suffix=" px", visible_if=when("resize", "exact")),
+            Option("height", t("opt.height"), Kind.INT, 1080, minimum=1, maximum=65535,
+                   suffix=" px", visible_if=when("resize", "exact")),
+            Option("resample", t("opt.resample"), Kind.CHOICE, "lanczos",
+                   choices=tuple((k, t(f"opt.resample.{k}")) for k in _RESAMPLE),
+                   help=t("opt.resample_help"),
+                   visible_if=when("resize", "percent", "fit", "exact")),
         ]
         if target.id in ("webp", "avif"):
             opts.append(Option("lossless", t("opt.lossless"), Kind.BOOL, False))
@@ -338,6 +347,10 @@ def reduce_colors(im: Any, colors: int, dither: bool) -> Any:
     return rgb.quantize(palette=palette, dither=Image.Dither.FLOYDSTEINBERG)
 
 
+# Resampling filters for resizing, keyed by option value (PIL Image.Resampling names).
+_RESAMPLE = ("lanczos", "bicubic", "bilinear", "nearest")
+
+
 def _resize(im: Any, opts: dict[str, Any]) -> Any:
     from PIL import Image
 
@@ -350,10 +363,16 @@ def _resize(im: Any, opts: dict[str, Any]) -> Any:
         box_w, box_h = int(opts.get("max_width", width)), int(opts.get("max_height", height))
         scale = min(box_w / width, box_h / height, 1.0)
         size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    elif mode == "exact":
+        # Exact target size, scaling up or down; the aspect ratio follows the given values.
+        size = (max(1, int(opts.get("width", width))), max(1, int(opts.get("height", height))))
     else:
         return im
     if size == im.size:
         return im
-    if im.mode == "P":
+    resample = str(opts.get("resample", "lanczos"))
+    if resample not in _RESAMPLE:
+        resample = "lanczos"
+    if im.mode == "P" and resample != "nearest":
         im = im.convert("RGBA")
-    return im.resize(size, Image.Resampling.LANCZOS)
+    return im.resize(size, Image.Resampling[resample.upper()])
