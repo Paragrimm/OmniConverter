@@ -76,6 +76,10 @@ class ImageBackend(Backend):
                    suffix=" px", visible_if=when("resize", "exact")),
             Option("height", t("opt.height"), Kind.INT, 1080, minimum=1, maximum=65535,
                    suffix=" px", visible_if=when("resize", "exact")),
+            Option("resample", t("opt.resample"), Kind.CHOICE, "lanczos",
+                   choices=tuple((k, t(f"opt.resample.{k}")) for k in _RESAMPLE),
+                   help=t("opt.resample_help"),
+                   visible_if=when("resize", "percent", "fit", "exact")),
         ]
         if target.id in ("webp", "avif"):
             opts.append(Option("lossless", t("opt.lossless"), Kind.BOOL, False))
@@ -343,6 +347,10 @@ def reduce_colors(im: Any, colors: int, dither: bool) -> Any:
     return rgb.quantize(palette=palette, dither=Image.Dither.FLOYDSTEINBERG)
 
 
+# Resampling filters for resizing, keyed by option value (PIL Image.Resampling names).
+_RESAMPLE = ("lanczos", "bicubic", "bilinear", "nearest")
+
+
 def _resize(im: Any, opts: dict[str, Any]) -> Any:
     from PIL import Image
 
@@ -362,6 +370,9 @@ def _resize(im: Any, opts: dict[str, Any]) -> Any:
         return im
     if size == im.size:
         return im
-    if im.mode == "P":
+    resample = str(opts.get("resample", "lanczos"))
+    if resample not in _RESAMPLE:
+        resample = "lanczos"
+    if im.mode == "P" and resample != "nearest":
         im = im.convert("RGBA")
-    return im.resize(size, Image.Resampling.LANCZOS)
+    return im.resize(size, Image.Resampling[resample.upper()])

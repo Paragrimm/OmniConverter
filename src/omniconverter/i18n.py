@@ -240,6 +240,18 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "opt.max_height": ("Max. Höhe", "Max. height"),
     "opt.resize.exact": ("Exakte Breite × Höhe (auch vergrößern)",
                          "Exact width × height (also upscales)"),
+    "opt.resample": ("Skalierungsfilter", "Resampling filter"),
+    "opt.resample.lanczos": ("Lanczos (scharf, Fotos)", "Lanczos (sharp, photos)"),
+    "opt.resample.bicubic": ("Bikubisch (weich)", "Bicubic (smooth)"),
+    "opt.resample.bilinear": ("Linear", "Linear"),
+    "opt.resample.nearest": ("Nächster Nachbar (harte Pixel, Pixel-Art)",
+                             "Nearest neighbor (hard pixels, pixel art)"),
+    "opt.resample_help": (
+        "Wie beim Skalieren neue Pixel berechnet werden. „Nächster Nachbar“ erhält harte "
+        "Kanten (Pixel-Art, Icons); bei ganzzahligen Faktoren wie 200 % bleibt jedes Pixel "
+        "exakt erhalten.",
+        "How new pixels are computed when resizing. “Nearest neighbor” keeps hard edges "
+        "(pixel art, icons); with integer factors such as 200 % every pixel stays exact."),
     "opt.background": ("Hintergrund für Transparenz", "Background for transparency"),
     "opt.lossless": ("Verlustfrei", "Lossless"),
     # --- texture maps ---

@@ -76,6 +76,36 @@ def test_resize(converter, tmp_path, mode, opts, size):
         assert im.size == size
 
 
+@pytest.mark.parametrize(("resample", "hard"), [
+    ("nearest", True), ("bilinear", False), ("bicubic", False), ("lanczos", False),
+])
+def test_resize_resample_filter(converter, tmp_path, resample, hard):
+    src = tmp_path / "checker.png"
+    im = Image.new("RGB", (4, 4), "black")
+    for x in range(4):
+        for y in range(4):
+            if (x + y) % 2:
+                im.putpixel((x, y), (255, 255, 255))
+    im.save(src)
+    out = convert(converter, src, "png", tmp_path, resize="exact", width=10, height=10,
+                  resample=resample)
+    with Image.open(out) as res:
+        assert res.size == (10, 10)
+        colors = {c for _, c in res.convert("RGB").getcolors(maxcolors=1000)}
+    # Nearest neighbor only copies source pixels; the smoothing filters blend them.
+    assert (colors <= {(0, 0, 0), (255, 255, 255)}) is hard
+
+
+def test_resize_nearest_keeps_palette_image(converter, tmp_path):
+    src = tmp_path / "pal.png"
+    Image.new("RGB", (8, 8), "red").convert("P", palette=Image.Palette.ADAPTIVE).save(src)
+    out = convert(converter, src, "png", tmp_path, resize="percent", percent=200,
+                  resample="nearest")
+    with Image.open(out) as res:
+        assert res.size == (16, 16)
+        assert res.convert("RGB").getpixel((15, 15)) == (255, 0, 0)
+
+
 def test_animated_gif_to_webp_keeps_frames(converter, tmp_path):
     src = tmp_path / "anim.gif"
     frames = [Image.new("RGB", (40, 30), c) for c in ("red", "green", "blue")]
