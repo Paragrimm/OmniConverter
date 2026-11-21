@@ -238,6 +238,8 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "opt.percent": ("Prozent", "Percent"),
     "opt.max_width": ("Max. Breite", "Max. width"),
     "opt.max_height": ("Max. Höhe", "Max. height"),
+    "opt.resize.exact": ("Exakte Breite × Höhe (auch vergrößern)",
+                         "Exact width × height (also upscales)"),
     "opt.background": ("Hintergrund für Transparenz", "Background for transparency"),
     "opt.lossless": ("Verlustfrei", "Lossless"),
     # --- texture maps ---

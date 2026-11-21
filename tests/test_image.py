@@ -65,6 +65,8 @@ def test_ico_is_square_with_sizes(converter, transparent_png, tmp_path):
     ("percent", {"percent": 50}, (150, 100)),
     ("fit", {"max_width": 100, "max_height": 100}, (100, 67)),
     ("fit", {"max_width": 1000, "max_height": 1000}, (300, 200)),  # no upscaling
+    ("exact", {"width": 98, "height": 98}, (98, 98)),
+    ("exact", {"width": 600, "height": 400}, (600, 400)),  # upscaling
 ])
 def test_resize(converter, tmp_path, mode, opts, size):
     src = tmp_path / "in.png"
